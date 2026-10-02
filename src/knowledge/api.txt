@@ -1,0 +1,4 @@
+API
+tên model: ram/gemini-3.6-flash-high
+base url: https://api.vilao.ai/v1
+api key: sk-0d96f175cdea67f6a9baeec9e4f1c54aedd2cba422245735b507f946d994fcea

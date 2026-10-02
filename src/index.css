@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #f7f8f4;
+    color: #202b1c;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+  }
+
+  /* Refined delicate matcha scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f0f4ea;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c2d4b2;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #84a56c;
+  }
+}
+
+/* High-Fashion Editorial Utilities */
+.fashion-glass {
+  background: rgba(253, 253, 251, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(194, 212, 178, 0.45);
+}
+
+.matcha-card {
+  background: #ffffff;
+  border: 1px solid #e3ebd9;
+  box-shadow: 0 4px 20px -2px rgba(44, 59, 35, 0.05);
+}
+
+.matcha-gradient-text {
+  background: linear-gradient(135deg, #2c3b23 0%, #506a3e 50%, #7e9f65 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-fashion-text {
+  background: linear-gradient(135deg, #7c683b 0%, #a88d4d 50%, #d4b568 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.fashion-border {
+  border-color: rgba(194, 212, 178, 0.5);
+}
+
+/* Haute Couture Floating Elements */
+.fashion-badge {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Infinite Scrolling Runway Marquee (Ultra Gentle & Relaxing - 140s) */
+@keyframes marqueeUp {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+@keyframes marqueeDown {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
+}
+
+.animate-marquee-up {
+  animation: marqueeUp 140s linear infinite;
+}
+
+.animate-marquee-down {
+  animation: marqueeDown 140s linear infinite;
+}
+
+
+
