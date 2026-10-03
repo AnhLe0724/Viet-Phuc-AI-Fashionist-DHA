@@ -1,0 +1,212 @@
+# SCHEMA CHUẨN — Knowledge Base Cổ Phục Việt Nam
+# File này là template cho tất cả các file trang phục
+
+id: [unique_id]
+name: [Tên trang phục]
+name_en: [English name]
+aliases: [Các tên gọi khác]
+category: [northern | central | southern | national | court]
+gender: [female | male | unisex]
+historical_period: [Thời kỳ lịch sử]
+origin_region: [Vùng xuất xứ]
+
+# --- NHẬN DẠNG HÌNH ẢNH (dùng cho Vision AI) ---
+# AI dùng để nhận dạng khi người dùng upload ảnh
+visual_identifiers:
+  silhouette: [Mô tả dáng tổng thể]
+  collar: [Kiểu cổ]
+  closure: [Cách cài/buộc]
+  length: [Độ dài]
+  layers: [Số lớp]
+  distinctive_elements: [Các yếu tố nhận dạng đặc trưng]
+  colors_traditional: [Màu sắc truyền thống thường gặp]
+  common_patterns: [Họa tiết thường gặp]
+
+# --- Ý NGHĨA VĂN HÓA ---
+cultural_meaning:
+  symbolism: [Ý nghĩa biểu tượng]
+  historical_context: [Bối cảnh lịch sử]
+  social_role: [Vai trò xã hội khi mặc]
+  associated_values: [Các giá trị gắn liền]
+  fun_facts: [Sự kiện thú vị cho Gen Z]
+
+# --- MA TRẬN DỊP (QUAN TRỌNG NHẤT cho AI) ---
+# AI dùng để quyết định trang phục nào phù hợp dịp nào
+occasion_matrix:
+  perfect_fit:     # Score 5/5 - Hoàn toàn phù hợp
+    - [dịp_id]: [lý do ngắn gọn]
+  good_fit:        # Score 4/5 - Phù hợp tốt
+    - [dịp_id]: [lý do]
+  acceptable:      # Score 3/5 - Chấp nhận được
+    - [dịp_id]: [điều kiện cần đáp ứng]
+  not_recommended: # Score 2/5 - Không khuyến khích
+    - [dịp_id]: [lý do]
+  avoid:           # Score 1/5 - Tránh mặc
+    - [dịp_id]: [lý do]
+
+# --- MỨC ĐỘ TRANG TRỌNG ---
+# AI dùng để match với yêu cầu của người dùng
+formality:
+  score: [1-10]  # 1=casual, 10=ceremonial
+  level: [casual | semi-formal | formal | ceremonial]
+  notes: [Ghi chú điều chỉnh trang trọng]
+  can_be_adjusted_by: [Các yếu tố có thể tăng/giảm trang trọng]
+
+# --- QUY TẮC THỜI TIẾT (QUAN TRỌNG) ---
+# AI dùng để lọc theo điều kiện thời tiết
+weather_rules:
+  hot:   # >32°C
+    suitable_fabrics: []
+    avoid_fabrics: []
+    tips: ""
+  warm:  # 25-32°C
+    suitable_fabrics: []
+    tips: ""
+  cool:  # 18-25°C
+    suitable_fabrics: []
+    tips: ""
+  cold:  # <18°C
+    suitable_fabrics: []
+    avoid_fabrics: []
+    tips: ""
+  rainy:
+    considerations: ""
+    tips: ""
+
+# --- QUY TẮC MÀU SẮC THEO DỊP (QUAN TRỌNG) ---
+# AI dùng để tránh tư vấn màu sai dịp / màu kiêng kị
+color_rules:
+  by_occasion:
+    tet:
+      recommended: []
+      neutral: []
+      avoid: []
+      taboo: []
+      reason: ""
+    di_chua:
+      recommended: []
+      avoid: []
+      taboo: []
+      reason: ""
+    dam_cuoi:
+      recommended: []
+      avoid: []
+      taboo: []
+      reason: ""
+    le_hoi:
+      recommended: []
+      avoid: []
+    cafe_di_choi:
+      recommended: []
+      notes: ""
+  general_taboos:
+    - color: ""
+      reason: ""
+      exceptions: ""
+
+# --- CHẤT LIỆU VẢI ---
+fabric_guide:
+  premium:
+    - name: ""
+      feel: ""
+      best_for: []
+      price_range: ""
+  mid_range:
+    - name: ""
+      feel: ""
+      best_for: []
+  affordable:
+    - name: ""
+      best_for: []
+  avoid:
+    - name: ""
+      reason: ""
+
+# --- PHỐI ĐỒ TRUYỀN THỐNG ---
+traditional_styling:
+  must_have: []
+  recommended_accessories: []
+  hairstyle_suggestions: []
+  makeup_notes: ""
+
+# --- PHỐI ĐỒ HIỆN ĐẠI / REMIX (QUAN TRỌNG cho Gen Z) ---
+# AI dùng để gợi ý cách mặc hiện đại phù hợp
+modern_remix:
+  difficulty: [easy | medium | hard]
+  difficulty_reason: ""
+  
+  footwear:
+    works_well: []
+    avoid: []
+    
+  outerwear:
+    works_well: []
+    avoid: []
+    occasion_note: ""
+    
+  bags:
+    works_well: []
+    avoid: []
+    
+  accessories:
+    works_well: []
+    avoid: []
+    
+  style_combinations:
+    - name: ""          # Tên style (vd: "Áo dài x Streetwear")
+      description: ""
+      key_items: []
+      occasion_fit: []
+      difficulty: ""
+      
+  common_mistakes: []
+  pro_tips: []
+
+# --- VÓCDÁNG & SIZE ---
+body_guide:
+  flattering_for: []
+  less_flattering_for: []
+  adjustment_tips: []
+  size_notes: ""
+
+# --- QUY TẮC & ĐIỀU KIÊNG KỊ (QUAN TRỌNG - AI không được vi phạm) ---
+# AI phải check list này trước khi đưa ra bất kỳ gợi ý nào
+rules_and_taboos:
+  absolute_rules:     # Quy tắc bất di bất dịch
+    - rule: ""
+      reason: ""
+  strong_recommendations:  # Nên làm
+    - ""
+  common_mistakes:    # Lỗi người mặc hay mắc
+    - mistake: ""
+      correct: ""
+  cultural_sensitivities:  # Nhạy cảm văn hóa
+    - ""
+
+# --- THÔNG TIN MUA SẮM ---
+purchase_info:
+  price_range:
+    budget: ""      # Giá bình dân
+    mid: ""         # Giá trung bình
+    premium: ""     # Giá cao cấp
+  recommended_shops:
+    online:
+      - name: ""
+        url: ""
+        specialty: ""
+    offline:
+      - name: ""
+        location: ""
+  what_to_look_for: []
+  red_flags: []
+
+# --- TÌM KIẾM WEB (dùng để generate search queries) ---
+search_queries:
+  product_search: []   # Query tìm sản phẩm
+  image_search: []     # Query tìm ảnh tham khảo
+  style_search: []     # Query tìm outfit gợi ý
+
+# --- CÂU HỎI THƯỜNG GẶP ---
+faq:
+  - q: ""
+    a: ""
