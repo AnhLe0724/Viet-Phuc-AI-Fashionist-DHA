@@ -2,10 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 import { loadKeywords } from './keywords.js';
-import { crawlKeywordImages, downloadAndSaveImage, loadMetadata } from './crawler.js';
+import { crawlKeywordImages, downloadAndSaveImage, loadMetadata, checkSigLipHealth } from './crawler.js';
 import { generateOutfitRecommendation } from './rag.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +18,8 @@ const app = express();
 const PORT = 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // In-memory runtime state for keywords & crawled candidates
 let runtimeKeywords = loadKeywords();
@@ -46,6 +48,22 @@ syncWithDisk();
 
 // Serve static images from dataset directory
 app.use('/api/dataset', express.static(DATASET_DIR));
+app.use('/api/human-model', express.static(path.join(ROOT_DIR, 'src', 'human model')));
+app.use('/api/clothes', express.static(path.join(ROOT_DIR, 'src', 'clothes')));
+
+// Helper: Check SigLIP 2 / Mobile-VTON Python Service status
+function checkServiceStatus() {
+  checkSigLipHealth().then(status => {
+    if (status.status === 'ready') {
+      console.log(`[AI Suite] Python SigLIP 2 + Mobile-VTON đang hoạt động (${status.device || 'GPU/CPU'}) - Model: ${status.model_name}`);
+    } else {
+      console.log('[AI Suite] Python AI Service đang khởi động hoặc chưa sẵn sàng...');
+    }
+  }).catch(() => {});
+}
+
+// Initial status check
+setTimeout(checkServiceStatus, 2000);
 
 // 1. Get all keywords with status & categories
 app.get('/api/keywords', (req, res) => {
@@ -57,9 +75,9 @@ app.get('/api/keywords', (req, res) => {
   });
 });
 
-// 2. Crawl 3 best images for a single keyword
+// 2. Crawl 10 best images for a single keyword with Google SigLIP 2
 app.post('/api/crawl', async (req, res) => {
-  const { id, customQuery } = req.body;
+  const { id, customQuery, limit = 10 } = req.body;
   const kw = runtimeKeywords.find(k => k.id === Number(id));
 
   if (!kw) {
@@ -72,7 +90,7 @@ app.post('/api/crawl', async (req, res) => {
   }
 
   try {
-    const candidates = await crawlKeywordImages(kw);
+    const candidates = await crawlKeywordImages(kw, Number(limit) || 10);
     kw.candidates = candidates;
     kw.status = candidates.length > 0 ? 'ready' : 'failed';
 
@@ -90,9 +108,9 @@ app.post('/api/crawl', async (req, res) => {
   }
 });
 
-// 3. Batch crawl multiple keywords
+// 3. Batch crawl multiple keywords (10 images per keyword)
 app.post('/api/batch-crawl', async (req, res) => {
-  const { ids, onlyUncrawled } = req.body;
+  const { ids, onlyUncrawled, limit = 10 } = req.body;
   let targetKws = runtimeKeywords;
 
   if (Array.isArray(ids) && ids.length > 0) {
@@ -102,9 +120,8 @@ app.post('/api/batch-crawl', async (req, res) => {
     targetKws = runtimeKeywords.filter(k => k.status !== 'saved' && k.candidates.length === 0);
   }
 
-  // Crawl with controlled concurrency (3 parallel requests)
   const results = [];
-  const concurrency = 3;
+  const concurrency = 2; // Controlled concurrency for high quality & SigLIP 2 AI processing
 
   for (let i = 0; i < targetKws.length; i += concurrency) {
     const chunk = targetKws.slice(i, i + concurrency);
@@ -112,7 +129,7 @@ app.post('/api/batch-crawl', async (req, res) => {
       chunk.map(async (kw) => {
         try {
           kw.status = 'searching';
-          const candidates = await crawlKeywordImages(kw);
+          const candidates = await crawlKeywordImages(kw, Number(limit) || 10);
           kw.candidates = candidates;
           kw.status = candidates.length > 0 ? 'ready' : 'failed';
           results.push({ id: kw.id, success: true, count: candidates.length });
@@ -194,7 +211,16 @@ app.post('/api/batch-save-top', async (req, res) => {
   });
 });
 
-// 6. Dataset statistics
+// 6. SigLIP 2 AI Service Health & Status
+app.get('/api/siglip-status', async (req, res) => {
+  const status = await checkSigLipHealth();
+  res.json({
+    success: true,
+    ...status
+  });
+});
+
+// 7. Dataset statistics
 app.get('/api/stats', (req, res) => {
   syncWithDisk();
   const total = runtimeKeywords.length;
@@ -248,6 +274,81 @@ app.post('/api/chat-remix', async (req, res) => {
   }
 });
 
+// 8.5 Mobile-VTON Virtual Try-On Endpoint
+app.post('/api/try-on', async (req, res) => {
+  const { topCode, topUrl, topName, bottomCode, bottomUrl, bottomName } = req.body;
+  const metadata = loadMetadata();
+  
+  // Resolve top image path
+  let resolvedTopPath = null;
+  if (topCode && metadata[topCode] && metadata[topCode].fullPath && fs.existsSync(metadata[topCode].fullPath)) {
+    resolvedTopPath = metadata[topCode].fullPath;
+  } else if (topUrl && topUrl.startsWith('/api/dataset/')) {
+    const rel = topUrl.replace('/api/dataset/', '');
+    const candidatePath = path.join(DATASET_DIR, rel);
+    if (fs.existsSync(candidatePath)) resolvedTopPath = candidatePath;
+  }
+  if (!resolvedTopPath) {
+    const defaultShirt = path.join(ROOT_DIR, 'src', 'clothes', 'shirt.png');
+    if (fs.existsSync(defaultShirt)) resolvedTopPath = defaultShirt;
+  }
+
+  // Resolve bottom image path
+  let resolvedBottomPath = null;
+  if (bottomCode && metadata[bottomCode] && metadata[bottomCode].fullPath && fs.existsSync(metadata[bottomCode].fullPath)) {
+    resolvedBottomPath = metadata[bottomCode].fullPath;
+  } else if (bottomUrl && bottomUrl.startsWith('/api/dataset/')) {
+    const rel = bottomUrl.replace('/api/dataset/', '');
+    const candidatePath = path.join(DATASET_DIR, rel);
+    if (fs.existsSync(candidatePath)) resolvedBottomPath = candidatePath;
+  }
+
+  try {
+    const response = await axios.post('http://127.0.0.1:5001/api/try-on', {
+      topImagePath: resolvedTopPath,
+      bottomImagePath: resolvedBottomPath,
+      topName: topName || 'Áo Cổ Phục',
+      bottomName: bottomName || 'Quần / Váy Cổ Phục'
+    }, { timeout: 15000 });
+
+    res.json(response.data);
+  } catch (err) {
+    console.warn('[VTON Endpoint Error]:', err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      message: 'Không thể kết nối dịch vụ Mobile-VTON AI (port 5001)'
+    });
+  }
+});
+
+// 8.6 Mobile-VTON Custom Try-On Testing Endpoint
+app.post('/api/vton-custom', async (req, res) => {
+  const { humanImage, garmentImage, garmentType, garmentName } = req.body;
+
+  try {
+    const response = await axios.post('http://127.0.0.1:5001/api/vton-custom', {
+      humanImage,
+      garmentImage,
+      garmentType: garmentType || 'top',
+      garmentName: garmentName || 'Trang phục thử nghiệm'
+    }, { 
+      timeout: 25000,
+      maxContentLength: 50 * 1024 * 1024,
+      maxBodyLength: 50 * 1024 * 1024
+    });
+
+    res.json(response.data);
+  } catch (err) {
+    console.warn('[VTON Custom Endpoint Error]:', err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      message: 'Lỗi xử lý Virtual Try-On cho ảnh tùy chỉnh (port 5001)'
+    });
+  }
+});
+
 // 9. Get Styling Rules Codex from phoi do.txt
 app.get('/api/styling-rules', (req, res) => {
   try {
@@ -266,7 +367,7 @@ app.get('/api/styling-rules', (req, res) => {
   }
 });
 
-// 7. Open local dataset directory in Windows Explorer
+// 10. Open local dataset directory in Windows Explorer
 app.post('/api/open-folder', (req, res) => {
   const categoryId = req.body.categoryId;
   let targetPath = DATASET_DIR;

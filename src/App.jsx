@@ -4,13 +4,58 @@ import CrawlDataWorkspace from './components/CrawlDataWorkspace';
 import WelcomeWorkspace from './components/WelcomeWorkspace';
 import LibraryWorkspace from './components/LibraryWorkspace';
 import RemixRoomWorkspace from './components/RemixRoomWorkspace';
+import TestingWorkspace from './components/TestingWorkspace';
 import CandidateModal from './components/CandidateModal';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('UI Crash Error caught by ErrorBoundary:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#f7f8f4] flex items-center justify-center p-6 text-matcha-950">
+          <div className="max-w-lg w-full bg-white p-8 rounded-3xl border border-rose-200 shadow-xl text-center space-y-4">
+            <div className="w-14 h-14 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center mx-auto text-2xl">⚠️</div>
+            <h2 className="font-fashion text-2xl font-bold text-rose-900">Đã xảy ra lỗi giao diện</h2>
+            <p className="text-xs text-rose-700 font-mono bg-rose-50 p-3 rounded-xl text-left overflow-auto max-h-40">
+              {this.state.error?.toString()}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 rounded-full bg-matcha-900 text-cream-50 font-bold text-xs hover:bg-matcha-950 transition"
+            >
+              Tải lại trang (F5)
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('welcome'); // 'welcome' | 'crawl' | 'library' | 'remix'
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
+  const [activeTab, setActiveTab] = useState('testing'); // 'crawl' | 'remix' | 'testing' | 'library' | 'welcome'
   const [keywords, setKeywords] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [siglipStatus, setSiglipStatus] = useState(null);
   const [modalKeyword, setModalKeyword] = useState(null);
   const [loadingStates, setLoadingStates] = useState({});
   const [toast, setToast] = useState(null);
@@ -23,21 +68,37 @@ export default function App() {
     }, 4000);
   };
 
-  // Fetch all keywords and stats
+  // Fetch all keywords, stats and SigLIP 2 status with quick timeout fallback
   const fetchData = useCallback(async () => {
     try {
-      const [kwRes, statsRes] = await Promise.all([
-        fetch('/api/keywords').then(r => r.json()),
-        fetch('/api/stats').then(r => r.json())
+      const fetchWithTimeout = (url, ms = 3000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ms);
+        return fetch(url, { signal: controller.signal })
+          .then(r => {
+            clearTimeout(timeoutId);
+            return r.json();
+          })
+          .catch(() => null);
+      };
+
+      const [kwRes, statsRes, siglipRes] = await Promise.all([
+        fetchWithTimeout('/api/keywords'),
+        fetchWithTimeout('/api/stats'),
+        fetchWithTimeout('/api/siglip-status')
       ]);
 
-      if (kwRes.success) {
-        setKeywords(kwRes.keywords);
+      if (kwRes && kwRes.success) {
+        setKeywords(kwRes.keywords || []);
       }
-      setStats(statsRes);
+      if (statsRes) {
+        setStats(statsRes);
+      }
+      if (siglipRes) {
+        setSiglipStatus(siglipRes);
+      }
     } catch (err) {
       console.error('Fetch error:', err);
-      showToast('Không thể kết nối với Backend Server (port 3001)', 'error');
     } finally {
       setLoading(false);
     }
@@ -200,6 +261,7 @@ export default function App() {
               <CrawlDataWorkspace
                 keywords={keywords}
                 stats={stats}
+                siglipStatus={siglipStatus}
                 onCrawlSingle={handleCrawlSingle}
                 onCrawlBatch={handleCrawlBatch}
                 onSaveCandidate={handleSaveCandidate}
@@ -224,6 +286,12 @@ export default function App() {
               <RemixRoomWorkspace
                 savedCount={savedCount}
                 onSwitchToCrawl={() => setActiveTab('crawl')}
+              />
+            )}
+
+            {activeTab === 'testing' && (
+              <TestingWorkspace
+                onOpenFolder={handleOpenFolder}
               />
             )}
           </>

@@ -3,9 +3,9 @@ import {
   Sparkles, Send, Bot, User, RefreshCw, Layers, ShieldCheck, 
   Trash2, ExternalLink, HelpCircle, Check, Download, Info, Zap, 
   Shirt, Scissors, Heart, Compass, ArrowUpRight, CheckCircle2,
-  Palette, Camera, Copy, Eye, Flame, Moon, Sparkle
+  Palette, Camera, Copy, Eye, Flame, Moon, Sparkle, Cpu
 } from 'lucide-react';
-import womanImg from '../image/woman.png';
+import womanImg from '../human model/woman 1.png';
 import MarkdownRenderer from './MarkdownRenderer';
 
 // 1. Initial suggestion bubbles when NO outfit has been chosen yet (Gợi ý chọn hoàn cảnh / vóc dáng)
@@ -98,99 +98,59 @@ function ColorPalettesView({ palettes }) {
         </h4>
       </div>
 
-      {palettes.map((pal, pIdx) => (
-        <div 
-          key={pIdx}
-          className="rounded-2xl bg-white border border-matcha-300 shadow-md p-4 space-y-3.5 transition hover:shadow-lg"
-        >
-          {/* Palette Title & Vibe */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h5 className="text-xs sm:text-sm font-bold text-matcha-950 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-matcha-600 animate-pulse" />
-              {pal.paletteName || `Bản phối số ${pIdx + 1}`}
-            </h5>
-            {pal.vibe && (
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-matcha-100 text-matcha-900 border border-matcha-300 shadow-2xs">
-                ✨ {pal.vibe}
+      <div className="grid grid-cols-1 gap-3.5">
+        {palettes.map((pal, pIdx) => (
+          <div 
+            key={pIdx}
+            className="rounded-2xl bg-white/90 border border-matcha-200 p-4 shadow-sm space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-fashion font-bold text-matcha-950">
+                {pal.paletteName}
               </span>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-semibold border border-amber-200">
+                {pal.vibe}
+              </span>
+            </div>
+
+            {/* Color Swatches */}
+            <div className="grid grid-cols-4 gap-2">
+              {pal.colors.map((c, cIdx) => (
+                <div 
+                  key={cIdx}
+                  onClick={() => copyToClipboard(c.hex)}
+                  className="group relative flex flex-col items-center p-2 rounded-xl border border-matcha-100 hover:border-matcha-400 bg-matcha-50/50 cursor-pointer transition"
+                  title="Nhấp để copy mã HEX"
+                >
+                  <div 
+                    className="w-full h-8 rounded-lg shadow-inner mb-1.5 transition group-hover:scale-105"
+                    style={{ backgroundColor: c.hex }}
+                  />
+                  <span className="text-[10px] font-bold text-matcha-950 truncate w-full text-center">
+                    {c.name}
+                  </span>
+                  <span className="text-[9px] font-mono text-matcha-600 flex items-center gap-0.5">
+                    {copiedHex === c.hex ? <Check className="w-2.5 h-2.5 text-emerald-600" /> : c.hex}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Fortune-Teller / Spiritual Analysis */}
+            {pal.fortuneMeaning && (
+              <div className="rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-50 to-cream-100 border border-amber-200/80 p-3 text-xs text-amber-950 leading-relaxed flex items-start gap-2.5">
+                <span className="text-base flex-shrink-0">🔮</span>
+                <div>
+                  <strong className="font-fashion font-bold text-amber-900 block mb-0.5">Luận Giải Phong Thủy & Ý Nghĩa:</strong>
+                  <p className="text-[11px] text-amber-900/90 italic font-serif leading-normal">
+                    {pal.fortuneMeaning}
+                  </p>
+                </div>
+              </div>
             )}
           </div>
-
-          {/* Modern Square Color Blocks Side-by-Side (Khối vuông hiện đại xếp cạnh nhau) */}
-          {pal.colors && Array.isArray(pal.colors) && (
-            <div>
-              <p className="text-[11px] font-semibold text-matcha-800 mb-2">
-                🎨 Khối màu thiết kế (Bấm để copy mã HEX):
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {pal.colors.map((c, cIdx) => (
-                  <div
-                    key={cIdx}
-                    onClick={() => copyToClipboard(c.hex)}
-                    className="group relative flex flex-col items-center bg-matcha-50/60 border border-matcha-200 rounded-2xl p-2.5 cursor-pointer hover:border-matcha-500 hover:bg-matcha-100/50 hover:shadow-md transition-all duration-200"
-                    title={`Bấm để copy ${c.hex}`}
-                  >
-                    {/* Modern Square Swatch Tile */}
-                    <div
-                      className="w-full aspect-square rounded-xl shadow-inner border border-black/15 transition-transform duration-200 group-hover:scale-105 flex items-center justify-center relative overflow-hidden"
-                      style={{ backgroundColor: c.hex }}
-                    >
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition flex items-center justify-center">
-                        {copiedHex === c.hex ? (
-                          <div className="bg-black/75 text-cream-50 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-lg">
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            Đã chép
-                          </div>
-                        ) : (
-                          <Copy className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition" />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Color Info */}
-                    <div className="w-full text-center mt-2">
-                      <span className="font-mono text-[11px] font-bold text-matcha-950 block group-hover:text-matcha-700">
-                        {c.hex}
-                      </span>
-                      <p className="text-[10px] font-medium text-matcha-800 truncate mt-0.5" title={c.name}>
-                        {c.name || 'Màu phối'}
-                      </p>
-                      {c.role && (
-                        <p className="text-[9px] text-matcha-600 truncate italic">
-                          ({c.role})
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Spiritual Fortune-Teller Analysis Card (Ý nghĩa tâm linh như Thầy Bói) */}
-          {pal.fortuneMeaning && (
-            <div className="rounded-xl bg-[#142113] border border-amber-500/40 p-3.5 shadow-inner text-amber-50 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
-              
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-base">🔮</span>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
-                  Lời Phán Của Thầy Bói & Phong Thủy Ngũ Hành
-                </span>
-              </div>
-              
-              <p className="text-xs leading-relaxed text-cream-100 italic pl-1 border-l-2 border-amber-400/60 my-1 font-serif">
-                "{pal.fortuneMeaning}"
-              </p>
-              
-              <div className="mt-2 pt-2 border-t border-amber-500/20 flex items-center justify-between text-[10px] text-amber-300/80 font-sans">
-                <span>☯ Khai Thông Vận Khí & Tương Sinh</span>
-                <span>✨ Quẻ Cát Tường</span>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -201,9 +161,9 @@ export default function RemixRoomWorkspace({ savedCount, onSwitchToCrawl }) {
       role: 'assistant',
       content: `Kính chào quý cô! Tôi là **AI Stylist Cổ Phục** của *L'Atelier Việt Phục Remix*. 
 
-Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di sản** (\`phoi do.txt\`) và kết nối trực tiếp với **kho 100 tác phẩm Dataset**.
+Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di sản** (\`phoi do.txt\`), tích hợp **Mobile-VTON Virtual Try-On** và kết nối trực tiếp với **kho 100 tác phẩm Dataset**.
 
-👉 Xin vui lòng chia sẻ vóc dáng và hoàn cảnh bạn muốn diện (ví dụ: *Nữ dáng cao, đi chơi dạo phố nhiều năng động* hoặc *Đi tiệc Tết thanh lịch*), tôi sẽ tư vấn và **minh họa trực tiếp các mảnh trang phục cân đối 2 bên người mẫu kèm đường chỉ dẫn phân tích**!`,
+👉 Xin vui lòng chia sẻ vóc dáng và hoàn cảnh bạn muốn diện (ví dụ: *Nữ dáng cao, đi chơi dạo phố nhiều năng động* hoặc *Đi tiệc Tết thanh lịch*), tôi sẽ tư vấn và **tự động thay trang phục Áo & Quần trực tiếp lên người mẫu bằng AI**!`,
       outfit: null,
       colorPalettes: null
     }
@@ -230,8 +190,8 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
         name: 'Quần lụa ống rộng truyền thống',
         reason: 'Chất liệu lụa mềm mại, thoải mái vận động và tạo bước đi thướt tha',
         categoryName: 'Quần & Váy Cổ Phục',
-        imageUrl: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=500&auto=format&fit=crop&q=60',
-        isSavedLocal: false
+        imageUrl: '/api/dataset/02_quan_vay_co_phuc/VP_015_quan_sa_trang.jpg',
+        isSavedLocal: true
       },
       {
         slot: 'footwear',
@@ -254,15 +214,60 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
     ]
   });
 
-  const chatEndRef = useRef(null);
+  // Mobile-VTON Virtual Try-On Live States
+  const [tryonResultUrl, setTryonResultUrl] = useState(null);
+  const [isTryingOn, setIsTryingOn] = useState(false);
+  const [tryonMode, setTryonMode] = useState('vton'); // 'vton' | 'original'
+  const [tryonSteps, setTryonSteps] = useState([]);
+  const [tryonDetails, setTryonDetails] = useState(null);
 
-  // Stage detection: true if user has received an outfit recommendation or interacted
-  const hasOutfitGenerated = messages.some(m => m.outfit !== null && m.outfit !== undefined) || messages.some(m => m.role === 'user');
+  const chatEndRef = useRef(null);
 
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // Execute Virtual Try-On using Mobile-VTON Pipeline
+  const executeVirtualTryOn = async (outfit) => {
+    if (!outfit || !outfit.recommendedItems) return;
+    const topItem = outfit.recommendedItems.find(i => i.slot === 'top');
+    const bottomItem = outfit.recommendedItems.find(i => i.slot === 'bottom');
+
+    setIsTryingOn(true);
+    try {
+      const res = await fetch('/api/try-on', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topCode: topItem?.code,
+          topUrl: topItem?.imageUrl,
+          topName: topItem?.name,
+          bottomCode: bottomItem?.code,
+          bottomUrl: bottomItem?.imageUrl,
+          bottomName: bottomItem?.name
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.resultUrl) {
+        setTryonResultUrl(data.resultUrl);
+        setTryonMode('vton');
+        setTryonSteps(data.steps || []);
+        setTryonDetails(data.details || {});
+      }
+    } catch (err) {
+      console.warn('[VTON Execution Warning]:', err);
+    } finally {
+      setIsTryingOn(false);
+    }
+  };
+
+  // Run try-on when initial lookbook or outfit changes
+  useEffect(() => {
+    if (currentOutfit && currentOutfit.recommendedItems) {
+      executeVirtualTryOn(currentOutfit);
+    }
+  }, [currentOutfit?.outfitTitle]);
 
   // Handle send message
   const handleSendMessage = async (textToSend) => {
@@ -286,10 +291,8 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
       const data = await res.json();
 
       if (data.success) {
-        // Prepare assistant message
         let palettes = data.colorPalettes;
 
-        // Fallback intelligent color palette parsing if user asked for color but AI returned text only
         const isColorQuery = text.toLowerCase().includes('phối màu') || text.toLowerCase().includes('màu sắc') || text.toLowerCase().includes('mã màu') || text.toLowerCase().includes('tâm linh');
         if (!palettes && isColorQuery) {
           palettes = [
@@ -329,6 +332,8 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
 
         if (data.outfit && data.outfit.recommendedItems) {
           setCurrentOutfit(data.outfit);
+          // Automatically trigger Mobile-VTON Virtual Try-On for the newly recommended outfit!
+          executeVirtualTryOn(data.outfit);
         }
       } else {
         setMessages(prev => [
@@ -372,17 +377,18 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
       {/* Top Breadcrumb & Status Bar */}
       <div className="flex-shrink-0 flex items-center justify-between bg-white border border-matcha-200/90 rounded-2xl px-5 py-2.5 shadow-sm">
         <div className="flex items-center gap-2.5 text-xs">
-          <span className="w-2.5 h-2.5 rounded-full bg-matcha-600 animate-pulse" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
           <span className="text-matcha-950 font-bold uppercase tracking-wider text-[11px] font-sans">
             L'Atelier Haute Couture Studio:
           </span>
-          <span className="font-fashion text-sm text-matcha-900 bg-matcha-100 px-3 py-0.5 rounded-full border border-matcha-200 font-bold">
+          <span className="font-fashion text-xs text-matcha-900 bg-matcha-100 px-2.5 py-0.5 rounded-full border border-matcha-200 font-bold">
             Model: ram/gemini-3.6-flash-high
           </span>
           <span className="text-matcha-300">|</span>
-          <span className="text-matcha-700 font-sans">
-            Cẩm nang: <code className="text-matcha-900 font-semibold bg-matcha-50 px-1.5 py-0.5 rounded border border-matcha-200">phoi do.txt (1,270 quy tắc)</code>
-          </span>
+          <div className="flex items-center gap-1 bg-gradient-to-r from-emerald-100 to-teal-100 px-3 py-0.5 rounded-full border border-emerald-300 text-emerald-950 text-[11px] font-bold">
+            <Cpu className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Virtual Try-On: CVPR 2026 Mobile-VTON</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-4 text-xs font-sans">
@@ -421,15 +427,23 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
               </h2>
             </div>
 
-            <span className="text-xs font-fashion font-bold text-cream-100 bg-[#233520] px-3.5 py-1 rounded-full border border-[#405c3b] shadow-sm">
-              {currentOutfit?.recommendedItems?.length || 0} Pièces
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => executeVirtualTryOn(currentOutfit)}
+                disabled={isTryingOn}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md transition disabled:opacity-50"
+                title="Chạy lại thử đồ bằng Mobile-VTON AI"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTryingOn ? 'animate-spin' : ''}`} />
+                <span>{isTryingOn ? 'Đang thử đồ...' : 'Ướm Thử VTON'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Stage Area: Symmetrical Left & Right Columns Flanking the Center Character */}
           <div className="relative flex-1 flex items-center justify-between px-2 2xl:px-4 my-1 min-h-0 overflow-hidden">
             
-            {/* SVG ORTHOGONAL LEADER LINES (ĐƯỜNG GẤP KHÚC PHÂN TÍCH THỜI TRANG) */}
+            {/* SVG ORTHOGONAL LEADER LINES */}
             <svg 
               viewBox="0 0 1000 700" 
               preserveAspectRatio="none"
@@ -448,57 +462,51 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                   <stop offset="100%" stopColor="#fef08a" stopOpacity="1" />
                 </linearGradient>
                 <linearGradient id="lineGradDashed" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#4d7c0f" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#84cc16" stopOpacity="0.4" />
+                  <stop offset="0%" stopColor="#4d7c0f" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#a3e635" stopOpacity="0.4" />
                 </linearGradient>
               </defs>
 
-              {/* 1. Headwear Line (Left Top [335, 145] -> Head Target [495, 95]) */}
+              {/* 1. Headwear Line */}
               {headwearItem ? (
                 <g>
-                  {/* Start pin on card */}
                   <circle cx="335" cy="145" r="4.5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal -> Horizontal */}
                   <path
-                    d="M 335 145 L 430 145 L 465 95 L 495 95"
+                    d="M 335 145 L 425 145 L 455 110 L 488 110"
                     fill="none"
                     stroke="url(#lineGradGoldLeft)"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
-                  <circle cx="495" cy="95" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
-                  <circle cx="495" cy="95" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
+                  <circle cx="488" cy="110" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
+                  <circle cx="488" cy="110" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
                 </g>
               ) : (
                 <g opacity="0.35">
                   <path
-                    d="M 335 145 L 430 145 L 465 95 L 495 95"
+                    d="M 335 145 L 425 145 L 455 110 L 488 110"
                     fill="none"
                     stroke="url(#lineGradDashed)"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
-                  <circle cx="495" cy="95" r="3" fill="#4d7c0f" />
+                  <circle cx="488" cy="110" r="3" fill="#4d7c0f" />
                 </g>
               )}
 
-              {/* 2. Top Main Costume Line (Left Mid [335, 370] -> Chest/Torso Target [488, 235]) */}
+              {/* 2. Main Top Costume Line */}
               {topItem ? (
                 <g>
-                  {/* Start pin on card */}
-                  <circle cx="335" cy="370" r="5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal elbow -> Horizontal */}
+                  <circle cx="335" cy="370" r="5.5" fill="#facc15" stroke="#182617" strokeWidth="2.5" />
                   <path
                     d="M 335 370 L 420 370 L 455 235 L 488 235"
                     fill="none"
                     stroke="url(#lineGradGoldLeft)"
-                    strokeWidth="3"
+                    strokeWidth="3.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
                   <circle cx="488" cy="235" r="6" fill="#fde047" stroke="#182617" strokeWidth="2" />
                   <circle cx="488" cy="235" r="13" fill="none" stroke="#facc15" strokeWidth="2" opacity="0.9" className="animate-ping" />
                 </g>
@@ -515,12 +523,10 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                 </g>
               )}
 
-              {/* 3. Bottom Pants/Skirt Line (Left Bottom [335, 595] -> Waist/Pants Target [488, 490]) */}
+              {/* 3. Bottom Pants/Skirt Line */}
               {bottomItem ? (
                 <g>
-                  {/* Start pin on card */}
                   <circle cx="335" cy="595" r="4.5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal elbow -> Horizontal */}
                   <path
                     d="M 335 595 L 425 595 L 455 490 L 488 490"
                     fill="none"
@@ -529,7 +535,6 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
                   <circle cx="488" cy="490" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
                   <circle cx="488" cy="490" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
                 </g>
@@ -546,12 +551,10 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                 </g>
               )}
 
-              {/* 4. Outer Layer Line (Right Top [665, 145] -> Shoulder/Arm Target [525, 200]) */}
+              {/* 4. Outer Layer Line */}
               {layerItem ? (
                 <g>
-                  {/* Start pin on card */}
                   <circle cx="665" cy="145" r="4.5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal elbow -> Horizontal */}
                   <path
                     d="M 665 145 L 575 145 L 545 200 L 525 200"
                     fill="none"
@@ -560,7 +563,6 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
                   <circle cx="525" cy="200" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
                   <circle cx="525" cy="200" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
                 </g>
@@ -577,12 +579,10 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                 </g>
               )}
 
-              {/* 5. Accessory Line (Right Mid [665, 370] -> Hand/Hip Target [565, 360]) */}
+              {/* 5. Accessory Line */}
               {accessoryItem ? (
                 <g>
-                  {/* Start pin on card */}
                   <circle cx="665" cy="370" r="4.5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal elbow -> Horizontal */}
                   <path
                     d="M 665 370 L 595 370 L 580 360 L 565 360"
                     fill="none"
@@ -591,7 +591,6 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
                   <circle cx="565" cy="360" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
                   <circle cx="565" cy="360" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
                 </g>
@@ -608,12 +607,10 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                 </g>
               )}
 
-              {/* 6. Footwear Line (Right Bottom [665, 595] -> Feet Target [505, 660]) */}
+              {/* 6. Footwear Line */}
               {footwearItem ? (
                 <g>
-                  {/* Start pin on card */}
                   <circle cx="665" cy="595" r="4.5" fill="#facc15" stroke="#182617" strokeWidth="2" />
-                  {/* Leader line: Horizontal -> Diagonal elbow -> Horizontal */}
                   <path
                     d="M 665 595 L 580 595 L 540 660 L 505 660"
                     fill="none"
@@ -622,7 +619,6 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* Target on mannequin */}
                   <circle cx="505" cy="660" r="5" fill="#fde047" stroke="#182617" strokeWidth="2" />
                   <circle cx="505" cy="660" r="11" fill="none" stroke="#facc15" strokeWidth="1.5" opacity="0.8" className="animate-ping" />
                 </g>
@@ -640,7 +636,7 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
               )}
             </svg>
 
-            {/* LEFT COLUMN: 3 Symmetrically Aligned Slots (Headwear, Main Top, Bottom) - 10%+ LARGER */}
+            {/* LEFT COLUMN: Slots (Headwear, Main Top, Bottom) */}
             <div className="relative z-20 w-[32%] max-w-[340px] 2xl:max-w-[410px] h-full flex flex-col justify-around py-1 space-y-2.5">
               
               {/* Slot 1: Headwear */}
@@ -680,7 +676,7 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
               }`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] uppercase font-bold text-slate-950 bg-amber-400 px-3 py-0.5 rounded-full shadow-xs">
-                    👘 Áo Cổ Phục Chính
+                    👘 Áo Cổ Phục Chính (VTON)
                   </span>
                   <span className="text-xs font-fashion font-bold text-amber-300">{topItem ? topItem.code : 'VP_001'}</span>
                 </div>
@@ -709,7 +705,7 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
               }`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] uppercase font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    👖 Quần / Váy
+                    👖 Quần / Váy (VTON)
                   </span>
                   <span className="text-xs font-fashion font-bold text-cream-100">{bottomItem ? bottomItem.code : 'VP_XXX'}</span>
                 </div>
@@ -732,17 +728,68 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
 
             </div>
 
-            {/* CENTER: Female Model (50% LARGER - MAJESTIC RUNWAY SILHOUETTE) */}
-            <div className="relative z-10 flex-1 h-full flex items-center justify-center max-h-[580px] 2xl:max-h-[690px] px-2 overflow-visible">
-              <img
-                src={womanImg}
-                alt="Nhân vật nữ Việt Phục"
-                className="h-full w-auto max-h-[540px] 2xl:max-h-[660px] object-contain scale-[1.48] origin-center transform-gpu drop-shadow-[0_25px_50px_rgba(0,0,0,0.95)] transition-all duration-700 pointer-events-none"
-              />
+            {/* CENTER: Female Model (With Mobile-VTON Virtual Try-On) */}
+            <div className="relative z-10 flex-1 h-full flex flex-col items-center justify-center max-h-[580px] 2xl:max-h-[690px] px-2 overflow-visible">
+              
+              {/* Top VTON Mode Switcher & Status Badge */}
+              <div className="absolute top-2 z-30 flex items-center gap-1.5 bg-[#0c160b]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#3b5735] shadow-xl">
+                <button
+                  onClick={() => setTryonMode('vton')}
+                  disabled={!tryonResultUrl}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                    tryonMode === 'vton'
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'text-matcha-300 hover:text-cream-50'
+                  }`}
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isTryingOn ? 'animate-spin' : ''}`} />
+                  <span>{isTryingOn ? 'Đang ướm thử...' : '✨ Đã Thử Đồ (VTON)'}</span>
+                </button>
+
+                <button
+                  onClick={() => setTryonMode('original')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                    tryonMode === 'original'
+                      ? 'bg-white text-slate-950 shadow-sm'
+                      : 'text-matcha-300 hover:text-cream-50'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Người Mẫu Gốc</span>
+                </button>
+              </div>
+
+              {/* Model Image with Smooth Crossfade */}
+              <div className="relative h-full w-auto max-h-[540px] 2xl:max-h-[660px] flex items-center justify-center">
+                <img
+                  src={tryonMode === 'vton' && tryonResultUrl ? tryonResultUrl : womanImg}
+                  alt="Người mẫu woman 1.png (Mobile-VTON)"
+                  className={`h-full w-auto max-h-[540px] 2xl:max-h-[660px] object-contain scale-[1.38] origin-center transform-gpu drop-shadow-[0_25px_50px_rgba(0,0,0,0.95)] transition-all duration-500 ${
+                    isTryingOn ? 'opacity-70 blur-[1px]' : 'opacity-100'
+                  }`}
+                />
+
+                {/* Loading Overlay when Mobile-VTON is processing */}
+                {isTryingOn && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+                    <div className="px-4 py-2 rounded-2xl bg-black/85 backdrop-blur-md border border-amber-400/80 shadow-2xl flex items-center gap-2 text-xs font-bold text-amber-300 animate-pulse">
+                      <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                      <span>Mobile-VTON đang thay Áo & Quần...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom AI Model Tag */}
+              <div className="absolute bottom-1 z-30 flex items-center gap-1.5 text-[10px] text-matcha-300/80 bg-[#091108]/85 backdrop-blur-sm px-3 py-0.5 rounded-full border border-white/10 font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>CVPR 2026 Mobile-VTON • On-Device Virtual Try-On</span>
+              </div>
+
               <div className="absolute bottom-[-10px] w-72 h-8 rounded-full bg-gradient-to-r from-transparent via-matcha-400/50 to-transparent blur-lg pointer-events-none" />
             </div>
 
-            {/* RIGHT COLUMN: 3 Symmetrically Aligned Slots (Outer Layer, Accessory, Footwear) - 10%+ LARGER */}
+            {/* RIGHT COLUMN: Slots (Outer Layer, Accessory, Footwear) */}
             <div className="relative z-20 w-[32%] max-w-[340px] 2xl:max-w-[410px] h-full flex flex-col justify-around py-1 space-y-2.5">
               
               {/* Slot 4: Outer Layer */}
@@ -769,19 +816,19 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                   </div>
                 ) : (
                   <div className="h-20 flex items-center justify-center text-xs text-matcha-500 italic">
-                    Không dùng khoác layer
+                    Chưa chọn áo khoác ngoài
                   </div>
                 )}
               </div>
 
-              {/* Slot 5: Accessory / Bag / Jewelry */}
+              {/* Slot 5: Accessory */}
               <div className={`rounded-2xl backdrop-blur-md border p-3.5 2xl:p-4 shadow-xl transition-all duration-300 ${
                 accessoryItem
                   ? 'bg-[#182617]/95 border-[#3b5735] hover:border-matcha-400 ring-1 ring-white/5'
                   : 'bg-[#182617]/40 border-dashed border-[#2d4229]'
               }`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase font-bold text-fuchsia-300 bg-fuchsia-500/20 px-2.5 py-0.5 rounded-full border border-fuchsia-500/30">
+                  <span className="text-[10px] uppercase font-bold text-sky-300 bg-sky-500/20 px-2.5 py-0.5 rounded-full border border-sky-500/30">
                     👜 Phụ Kiện
                   </span>
                   <span className="text-xs font-fashion font-bold text-cream-100">{accessoryItem ? accessoryItem.code : 'VP_XXX'}</span>
@@ -810,8 +857,8 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
                   : 'bg-[#182617]/40 border-dashed border-[#2d4229]'
               }`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase font-bold text-cyan-300 bg-cyan-500/20 px-2.5 py-0.5 rounded-full border border-cyan-500/30">
-                    👟 Giày Dép
+                  <span className="text-[10px] uppercase font-bold text-indigo-300 bg-indigo-500/20 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                    👟 Giày / Dép
                   </span>
                   <span className="text-xs font-fashion font-bold text-cream-100">{footwearItem ? footwearItem.code : 'VP_XXX'}</span>
                 </div>
@@ -836,166 +883,120 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
 
           </div>
 
-          {/* Left Panel Footer */}
-          <div className="relative z-20 flex-shrink-0 pt-2.5 border-t border-[#2d4229] flex items-center justify-between text-xs text-matcha-300 font-sans">
-            <div className="flex items-center gap-2.5 truncate max-w-xl">
-              <span className="font-curvy text-xl text-amber-300 font-bold">Conseil:</span>
-              <span className="truncate text-cream-100 font-medium">
-                {currentOutfit?.recommendedItems?.[0]?.reason || 'Phối hợp hài hòa giữa cấu trúc Cổ phục và phụ kiện đương đại.'}
-              </span>
-            </div>
-
-            <span className="text-[11px] font-medium text-amber-300 bg-[#233520] px-3.5 py-1 rounded-full border border-[#405c3b] shadow-sm whitespace-nowrap">
-              ✓ Chuẩn quy tắc phối đồ di sản
+          {/* Left Panel Footer Summary */}
+          <div className="relative z-20 flex-shrink-0 pt-2 border-t border-[#2d4229] flex items-center justify-between text-xs text-matcha-300 font-sans">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Dáng người: Nữ người mẫu chuẩn studio (1600x1600) • Tự động warp & thay trang phục qua Mobile-VTON AI</span>
+            </span>
+            <span className="text-[11px] text-matcha-400 italic">
+              {tryonDetails?.top ? `Đang mặc: ${tryonDetails.top}` : 'Sẵn sàng thử đồ'}
             </span>
           </div>
 
         </div>
 
-        {/* ================= RIGHT PANEL (40% WIDTH): L'ATELIER RAG AI CHATBOT ================= */}
-        <div className="h-full rounded-3xl bg-white border border-matcha-200 shadow-fashion flex flex-col justify-between overflow-hidden">
+        {/* ================= RIGHT PANEL (40% WIDTH): RAG CHATBOT WITH CONVERSATIONAL STAGES ================= */}
+        <div className="h-full rounded-3xl bg-white border border-matcha-200 shadow-xl flex flex-col min-h-0 overflow-hidden">
           
-          {/* Chatbot Header */}
-          <div className="flex-shrink-0 px-6 py-3.5 bg-matcha-100/60 border-b border-matcha-200/80 flex items-center justify-between">
+          {/* Chat Header */}
+          <div className="flex-shrink-0 px-5 py-3.5 border-b border-matcha-100 bg-matcha-50/70 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-matcha-900 flex items-center justify-center text-cream-50 shadow-sm">
-                <Bot className="w-5 h-5 stroke-[2]" />
+                <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-fashion font-bold text-matcha-950 flex items-center gap-2">
-                  <span>L'Atelier AI Stylist</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.2 rounded-full bg-matcha-200 text-matcha-900 border border-matcha-300">
-                    Live RAG (40%)
-                  </span>
-                </h3>
-                <p className="text-[11px] text-matcha-700">
-                  Phân tích cẩm nang <strong className="text-matcha-900">phoi do.txt</strong> & dataset độc quyền
+                <h3 className="text-sm font-fashion font-bold text-matcha-950">AI Stylist Cổ Phục</h3>
+                <p className="text-[11px] text-matcha-700 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Online • Sẵn sàng tư vấn phối đồ & Try-On
                 </p>
               </div>
             </div>
 
             <button
-              onClick={() => setMessages([messages[0]])}
-              title="Xóa lịch sử tư vấn"
-              className="p-2 text-matcha-600 hover:text-rose-600 hover:bg-white rounded-full transition border border-transparent hover:border-matcha-200"
+              onClick={() => {
+                setMessages([
+                  {
+                    role: 'assistant',
+                    content: 'Đã làm mới phiên tư vấn! Hãy chọn gợi ý bên dưới hoặc nhập yêu cầu của bạn.',
+                    outfit: null,
+                    colorPalettes: null
+                  }
+                ]);
+              }}
+              className="p-1.5 text-matcha-600 hover:text-matcha-950 hover:bg-white rounded-full border border-transparent hover:border-matcha-200 transition"
+              title="Làm mới cuộc trò chuyện"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Quick Scenario Recommendation Chips (Sync with Active Stage) */}
-          <div className="flex-shrink-0 px-4 py-2.5 bg-matcha-50/50 border-b border-matcha-200/70 flex items-center gap-2 overflow-x-auto scrollbar-none">
-            <span className="text-[10px] uppercase font-bold text-matcha-700 whitespace-nowrap flex items-center gap-1 font-sans">
-              <Sparkles className="w-3 h-3 text-matcha-600" />
-              {hasOutfitGenerated ? 'Tùy biến look:' : 'Gợi ý nhanh:'}
-            </span>
-            {(hasOutfitGenerated ? OUTFIT_FOLLOW_UP_BUBBLES : INITIAL_SELECTION_BUBBLES).map((bubble, pIdx) => (
-              <button
-                key={pIdx}
-                onClick={() => handleSendMessage(bubble.prompt)}
-                disabled={isLoading}
-                className="px-3 py-1 rounded-full text-[11px] whitespace-nowrap bg-white hover:bg-matcha-100 text-matcha-800 hover:text-matcha-950 border border-matcha-200 shadow-sm transition flex-shrink-0 disabled:opacity-50 font-sans font-medium"
-              >
-                {bubble.title}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat Messages Feed */}
-          <div className="flex-1 p-5 overflow-y-auto space-y-4">
-            {messages.map((msg, idx) => {
+          {/* Chat Scrollable Message List */}
+          <div className="flex-1 p-4 2xl:p-5 overflow-y-auto space-y-4 bg-cream-50/40 min-h-0">
+            {messages.map((msg, index) => {
               const isUser = msg.role === 'user';
-              const isLatestAssistant = !isUser && idx === messages.length - 1;
 
               return (
                 <div
-                  key={idx}
-                  className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-fadeIn`}
+                  key={index}
+                  className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                 >
-                  {/* Avatar */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                    isUser
-                      ? 'bg-matcha-900 text-cream-50 shadow-sm'
-                      : 'bg-matcha-100 text-matcha-900 border border-matcha-200'
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                    isUser ? 'bg-matcha-800 text-cream-50' : 'bg-matcha-100 text-matcha-900 border border-matcha-300'
                   }`}>
                     {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                   </div>
 
-                  {/* Message Bubble */}
-                  <div className={`max-w-[88%] rounded-3xl px-5 py-3.5 text-xs leading-relaxed ${
-                    isUser
-                      ? 'bg-matcha-900 text-cream-50 font-medium rounded-tr-none shadow-sm'
+                  <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs font-sans shadow-sm ${
+                    isUser 
+                      ? 'bg-matcha-900 text-cream-50 rounded-tr-xs font-medium'
                       : msg.isError
-                      ? 'bg-rose-50 text-rose-900 border border-rose-200 rounded-tl-none'
-                      : 'bg-matcha-50/80 text-matcha-950 border border-matcha-200 rounded-tl-none shadow-sm'
+                      ? 'bg-rose-50 text-rose-900 border border-rose-200 rounded-tl-xs'
+                      : 'bg-white text-matcha-950 border border-matcha-200/90 rounded-tl-xs'
                   }`}>
-                    <div className="font-sans">
-                      <MarkdownRenderer content={msg.content} />
-                    </div>
+                    
+                    {/* Markdown Formatted Text */}
+                    <MarkdownRenderer content={msg.content} />
 
-                    {/* Rich Modern Color Palettes & Spiritual Fortune-Teller View */}
+                    {/* Render Color Palettes if message has them */}
                     {msg.colorPalettes && (
                       <ColorPalettesView palettes={msg.colorPalettes} />
                     )}
 
-                    {/* Pinned Outfit Badge */}
+                    {/* Interactive Outfit Card summary inside Chat */}
                     {msg.outfit && (
-                      <div className="mt-3.5 pt-3 border-t border-matcha-200 flex items-center justify-between text-[11px]">
-                        <span className="flex items-center gap-1.5 text-matcha-900 font-bold font-sans">
-                          <Check className="w-3.5 h-3.5 text-matcha-700" />
-                          Đã ghim lên nhân vật 60% bên trái
-                        </span>
-                        <button
-                          onClick={() => setCurrentOutfit(msg.outfit)}
-                          className="px-3 py-1 rounded-full bg-matcha-900 hover:bg-matcha-800 text-cream-50 font-bold shadow-sm"
-                        >
-                          Xem lại look này
-                        </button>
+                      <div className="mt-3 pt-3 border-t border-matcha-100 space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-fashion font-bold text-matcha-900">{msg.outfit.outfitTitle}</span>
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            ✓ Đã thử VTON
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {msg.outfit.recommendedItems?.map((item, itIdx) => (
+                            <div key={itIdx} className="bg-matcha-50/70 p-1.5 rounded-lg border border-matcha-200/60 text-[10px]">
+                              <span className="font-bold text-matcha-950 block truncate">{item.name}</span>
+                              <span className="text-matcha-600 font-mono text-[9px]">{item.code}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/* Inline 3 Follow-up Suggestion Bubbles inside Latest Assistant Outfit Message */}
-                    {isLatestAssistant && hasOutfitGenerated && (
-                      <div className="mt-4 pt-3 border-t border-dashed border-matcha-300/80 space-y-2">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-matcha-900">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Gợi ý tương tác tiếp theo:</span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-1.5">
-                          {OUTFIT_FOLLOW_UP_BUBBLES.map(bubble => {
-                            const IconComponent = bubble.icon;
-                            return (
-                              <button
-                                key={bubble.id}
-                                onClick={() => handleSendMessage(bubble.prompt)}
-                                disabled={isLoading}
-                                className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-medium border bg-gradient-to-r ${bubble.colorClass} shadow-2xs transition-all duration-200 flex items-center justify-between group disabled:opacity-50`}
-                              >
-                                <span className="flex items-center gap-2">
-                                  <IconComponent className="w-3.5 h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                                  <span className="truncate font-semibold">{bubble.title}</span>
-                                </span>
-                                <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 -translate-y-0.5 transition-transform flex-shrink-0 ml-2" />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })}
 
-            {/* Loading Indicator */}
             {isLoading && (
-              <div className="flex items-start gap-3 animate-fadeIn">
-                <div className="w-8 h-8 rounded-full bg-matcha-100 text-matcha-800 border border-matcha-200 flex items-center justify-center">
+              <div className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-matcha-100 text-matcha-900 border border-matcha-300 flex items-center justify-center flex-shrink-0">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="rounded-3xl rounded-tl-none bg-matcha-50 border border-matcha-200 px-5 py-3 text-xs text-matcha-700 flex items-center gap-2">
+                <div className="bg-white border border-matcha-200 rounded-2xl rounded-tl-xs p-3.5 text-xs text-matcha-700 flex items-center gap-2 shadow-sm">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-matcha-700" />
-                  <span>Đang phân tích cẩm nang <code className="text-matcha-900 font-bold">phoi do.txt</code> & thiết kế lookbook...</span>
+                  <span>AI Stylist đang tra cứu 1,270 quy tắc & kích hoạt Mobile-VTON...</span>
                 </div>
               </div>
             )}
@@ -1003,63 +1004,56 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
             <div ref={chatEndRef} />
           </div>
 
-          {/* Persistent Dynamic Quick Action Bubble Bar & Chat Input */}
-          <div className="flex-shrink-0 bg-matcha-50/90 border-t border-matcha-200 divide-y divide-matcha-200/60">
+          {/* Dynamic Suggestion Pills (Initial or Follow-up after generation) */}
+          <div className="flex-shrink-0 px-4 py-2 bg-white border-t border-matcha-100">
+            <div className="text-[10px] uppercase font-bold text-matcha-600 mb-1.5 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>Gợi ý tương tác nhanh:</span>
+            </div>
             
-            {/* Stage-Aware Interactive Quick Suggestion Bubbles (Bong bóng chat nút bấm) */}
-            <div className="p-2.5 px-4 bg-white/70 backdrop-blur-xs flex items-center gap-2 overflow-x-auto scrollbar-none">
-              <span className="text-[10px] uppercase font-bold text-matcha-800 flex items-center gap-1 whitespace-nowrap">
-                <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-                {hasOutfitGenerated ? 'Tùy chỉnh bộ đồ:' : 'Gợi ý chọn đồ:'}
-              </span>
-              
-              {(hasOutfitGenerated ? OUTFIT_FOLLOW_UP_BUBBLES : INITIAL_SELECTION_BUBBLES).map(bubble => {
-                const IconComponent = bubble.icon;
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {INITIAL_SELECTION_BUBBLES.slice(0, 3).map((bubble) => {
+                const Icon = bubble.icon;
                 return (
                   <button
                     key={bubble.id}
                     onClick={() => handleSendMessage(bubble.prompt)}
                     disabled={isLoading}
-                    title={bubble.title}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border bg-gradient-to-r ${bubble.colorClass} shadow-xs transition-all duration-200 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50 active:scale-95`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-matcha-50 hover:bg-matcha-100 text-matcha-900 border border-matcha-200 whitespace-nowrap transition shadow-xs disabled:opacity-50"
                   >
-                    <IconComponent className="w-3.5 h-3.5" />
+                    <Icon className="w-3 h-3 text-matcha-700" />
                     <span>{bubble.title}</span>
                   </button>
                 );
               })}
             </div>
+          </div>
 
-            {/* Chat Input Bar */}
-            <div className="p-3.5">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendMessage();
-                }}
-                className="flex items-center gap-2.5"
+          {/* Chat Input Box */}
+          <div className="flex-shrink-0 p-3.5 bg-matcha-50/80 border-t border-matcha-100">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex items-center gap-2 bg-white rounded-full border border-matcha-200 p-1.5 focus-within:border-matcha-600 focus-within:ring-2 focus-within:ring-matcha-200 transition shadow-sm"
+            >
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Nhập yêu cầu phối đồ (Ví dụ: Nữ đi chụp ảnh Tết, thích tone đỏ)..."
+                disabled={isLoading}
+                className="flex-1 px-4 py-1.5 text-xs text-matcha-950 focus:outline-none placeholder:text-matcha-400 bg-transparent"
+              />
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isLoading}
+                className="w-8 h-8 rounded-full bg-matcha-900 hover:bg-matcha-800 disabled:opacity-40 text-cream-50 flex items-center justify-center transition flex-shrink-0 shadow-sm"
               >
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder={hasOutfitGenerated ? "Nhập yêu cầu hoặc bấm 3 bong bóng tùy chỉnh ở trên..." : "Nhập dáng người & hoàn cảnh hoặc chọn gợi ý ở trên..."}
-                    className="w-full bg-white border border-matcha-200 px-5 py-3 rounded-full text-xs text-matcha-950 placeholder:text-matcha-400 focus:outline-none focus:border-matcha-600 shadow-sm transition font-sans"
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!inputMessage.trim() || isLoading}
-                  className="px-6 py-3 rounded-full text-xs font-bold bg-matcha-900 hover:bg-matcha-800 text-cream-50 shadow-md transition disabled:opacity-50 flex items-center gap-1.5 uppercase tracking-wide font-sans cursor-pointer"
-                >
-                  <span>Gửi</span>
-                  <Send className="w-3.5 h-3.5 fill-current" />
-                </button>
-              </form>
-            </div>
+                <Send className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+            </form>
           </div>
 
         </div>

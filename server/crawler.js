@@ -12,6 +12,8 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DATASET_DIR = path.join(ROOT_DIR, 'dataset');
 const METADATA_FILE = path.join(DATASET_DIR, 'metadata.json');
 
+const SIGLIP_SERVICE_URL = 'http://127.0.0.1:5001';
+
 // Ensure dataset dir exists
 if (!fs.existsSync(DATASET_DIR)) {
   fs.mkdirSync(DATASET_DIR, { recursive: true });
@@ -28,10 +30,20 @@ function getRandomUserAgent() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
+// Check SigLIP 2 service health
+export async function checkSigLipHealth() {
+  try {
+    const res = await axios.get(`${SIGLIP_SERVICE_URL}/health`, { timeout: 1500 });
+    return res.data;
+  } catch (e) {
+    return { status: 'offline', ready: false, is_loading: false, error: e.message };
+  }
+}
+
 // 1. Bing Image Search Scraper
 async function searchBingImages(query) {
   try {
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1&scenario=ImageBasicHover`;
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1&count=25&scenario=ImageBasicHover`;
     const res = await axios.get(url, {
       headers: {
         'User-Agent': getRandomUserAgent(),
@@ -53,7 +65,7 @@ async function searchBingImages(query) {
             results.push({
               url: meta.murl,
               thumbnail: meta.turl || meta.murl,
-              title: meta.t || '',
+              title: meta.t || query,
               width: meta.ow || 0,
               height: meta.oh || 0,
               source: meta.purl || '',
@@ -88,7 +100,6 @@ async function searchGoogleImages(query) {
     const $ = cheerio.load(res.data);
     const results = [];
 
-    // Extract image metadata from Google scripts
     $('script').each((_, el) => {
       const scriptContent = $(el).html() || '';
       if (scriptContent.includes('http') && (scriptContent.includes('.jpg') || scriptContent.includes('.png') || scriptContent.includes('.jpeg') || scriptContent.includes('.webp'))) {
@@ -125,7 +136,7 @@ async function searchGoogleImages(query) {
 async function searchWikimediaImages(query) {
   try {
     const cleanQuery = query.replace(/["']/g, '').replace(' Việt Nam', '').replace(' cổ phục việt nam', '');
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(cleanQuery)}&gsrlimit=10&prop=imageinfo&iiprop=url|size|mime&format=json`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(cleanQuery)}&gsrlimit=15&prop=imageinfo&iiprop=url|size|mime&format=json`;
     const res = await axios.get(url, {
       headers: { 'User-Agent': 'VietPhucRemix/2.0 (contact@vietphuc.local)' },
       timeout: 6000
@@ -158,7 +169,7 @@ async function searchWikimediaImages(query) {
   return [];
 }
 
-// Advanced Relevance & Quality Scorer
+// Heuristic Scorer for fallback
 export function evaluateCandidateWithRelevance(img, keywordObj) {
   const w = Number(img.width) || 0;
   const h = Number(img.height) || 0;
@@ -181,9 +192,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
 
   // 2. Keyword Matching in Title & URL
   if (title.includes(kwViet) || title.includes(kwNoAccent)) {
-    relevanceScore += 50; // Exact keyword match in title
+    relevanceScore += 50;
   } else {
-    // Token overlap
     let matchCount = 0;
     for (const token of kwTokens) {
       if (title.includes(token) || url.includes(token)) {
@@ -201,7 +211,7 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // High authority cultural domains boost
+  // Domain boost
   const goodDomains = ['vietphuc', 'kenh14', 'dep.com.vn', 'elle.vn', 'baotang', 'vogue', 'pinterest', 'wikimedia', 'dantri', 'vnexpress', 'thanhnien', 'tuoitre', 'zing', 'znews', 'fashion'];
   for (const gd of goodDomains) {
     if (domain.includes(gd)) {
@@ -210,8 +220,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // Negative Penalty for Irrelevant Stuff (ads, anime, memes, vector cliparts, unrelated retail)
-  const spamKeywords = ['clipart', 'vector', 'cartoon', 'anime', 'chibi', 'meme', 'coloring', 'in decal', 'shopee', 'lazada', 'tiki', 'giá rẻ', 'thanh lý', 'áo thun nữ rẻ', 'sách giáo khoa'];
+  // Negative Penalty
+  const spamKeywords = ['clipart', 'vector', 'cartoon', 'anime', 'chibi', 'meme', 'coloring', 'in decal', 'shopee', 'lazada', 'tiki', 'giá rẻ', 'thanh lý'];
   for (const sp of spamKeywords) {
     if (title.includes(sp) || url.includes(sp)) {
       relevanceScore -= 45;
@@ -223,7 +233,7 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
   let dimensionScore = 50;
 
   if (w > 0 && h > 0) {
-    if (w < 250 || h < 250) {
+    if (w < 200 || h < 200) {
       isValid = false;
       validationMessage = `Ảnh quá nhỏ (${w}x${h}px)`;
     } else if (w > 6000 || h > 6000) {
@@ -235,9 +245,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
         isValid = false;
         validationMessage = `Tỉ lệ khung hình bất thường (${ratio.toFixed(2)})`;
       } else {
-        // Ideal fashion aspect ratios (portrait 3:4, 2:3, square 1:1)
         if (ratio >= 0.6 && ratio <= 1.4) {
-          dimensionScore += 20; // Portrait / square bonus
+          dimensionScore += 20;
         }
         if (w >= 700 && h >= 700) {
           qualityBadge = 'HD Sắc Nét';
@@ -250,10 +259,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // Total combined score (Relevance 70% + Dimension 30%)
   const finalScore = Math.min(100, Math.max(0, Math.round(relevanceScore * 0.7 + dimensionScore * 0.3)));
 
-  // Badge assignment
   if (finalScore >= 80) {
     qualityBadge = 'Khớp Cao ★ HD';
   } else if (finalScore >= 60) {
@@ -266,16 +273,45 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     ...img,
     width: w,
     height: h,
-    isValid: isValid && finalScore >= 35,
+    isValid: isValid && finalScore >= 30,
     validationMessage,
     qualityBadge,
     relevanceScore,
-    qualityScore: finalScore
+    qualityScore: finalScore,
+    siglipScore: finalScore
   };
 }
 
-// Fetch top 3 best images for a keyword with parallel multi-query search
-export async function crawlKeywordImages(keywordObj) {
+// Call Google SigLIP 2 Python Service to score and rank candidates
+async function scoreWithSigLip2(keywordObj, candidates) {
+  try {
+    const payload = {
+      keyword: keywordObj.withAccent,
+      keywordNoAccent: keywordObj.withoutAccent,
+      category: keywordObj.category?.nameVi || 'Cổ phục Việt Nam',
+      candidates: candidates.map(c => ({
+        url: c.url,
+        thumbnail: c.thumbnail,
+        title: c.title,
+        width: c.width || 0,
+        height: c.height || 0,
+        domain: c.domain || '',
+        source: c.source || ''
+      }))
+    };
+
+    const res = await axios.post(`${SIGLIP_SERVICE_URL}/score-candidates`, payload, { timeout: 12000 });
+    if (res.data && res.data.success && Array.isArray(res.data.candidates) && res.data.candidates.length > 0) {
+      return res.data.candidates;
+    }
+  } catch (err) {
+    console.warn(`[SigLIP 2 Service Warning]: ${err.message}. Using fallback evaluation.`);
+  }
+  return null;
+}
+
+// Fetch top 10 best images for a keyword with Google SigLIP 2 AI Screening
+export async function crawlKeywordImages(keywordObj, limit = 10) {
   const queriesToRun = [];
 
   // Primary optimized query
@@ -283,7 +319,7 @@ export async function crawlKeywordImages(keywordObj) {
     queriesToRun.push(keywordObj.searchQuery);
   }
 
-  // Suggested secondary queries
+  // Suggested queries
   if (Array.isArray(keywordObj.suggestedQueries)) {
     for (const q of keywordObj.suggestedQueries) {
       if (!queriesToRun.includes(q)) {
@@ -294,16 +330,21 @@ export async function crawlKeywordImages(keywordObj) {
 
   if (queriesToRun.length === 0) {
     queriesToRun.push(`"${keywordObj.withAccent}" cổ phục việt nam`);
+    queriesToRun.push(`${keywordObj.withAccent} lookbook thời trang`);
+    queriesToRun.push(`${keywordObj.withoutAccent} Viet Nam`);
   }
 
   const primaryQuery = queriesToRun[0];
-  const secondaryQuery = queriesToRun[1] || `${keywordObj.withAccent} Việt Nam`;
+  const secondaryQuery = queriesToRun[1] || `${keywordObj.withAccent} thời trang Việt Nam`;
+  const tertiaryQuery = queriesToRun[2] || `cổ phục ${keywordObj.withAccent}`;
 
-  // Run Bing, Google, and Wikimedia in PARALLEL with Promise.allSettled for max speed & resilience
+  // Run Bing, Google, and Wikimedia in PARALLEL for maximum candidates
   const searchPromises = [
     searchBingImages(primaryQuery),
     searchGoogleImages(primaryQuery),
     searchBingImages(secondaryQuery),
+    searchGoogleImages(secondaryQuery),
+    searchBingImages(tertiaryQuery),
     searchWikimediaImages(keywordObj.withAccent)
   ];
 
@@ -326,17 +367,33 @@ export async function crawlKeywordImages(keywordObj) {
     }
   }
 
-  // Evaluate and rank by Relevance & Quality Score
-  const evaluated = unique
-    .map(c => evaluateCandidateWithRelevance(c, keywordObj))
-    .filter(c => c.isValid);
+  // Basic format & dimension pre-filter
+  const validPreFiltered = unique.filter(c => {
+    const url = (c.url || '').toLowerCase();
+    if (url.endsWith('.svg') || url.endsWith('.gif') || url.includes('favicon') || url.includes('logo')) {
+      return false;
+    }
+    return true;
+  });
 
-  // Sort: Highest Relevance/Quality score first
-  evaluated.sort((a, b) => b.qualityScore - a.qualityScore);
+  // Try Google SigLIP 2 AI multi-modal zero-shot scoring
+  const siglipCandidates = await scoreWithSigLip2(keywordObj, validPreFiltered.slice(0, 25));
 
-  // Take top 3
-  const top3 = evaluated.slice(0, 3);
-  return top3;
+  let finalRanked = [];
+
+  if (siglipCandidates && siglipCandidates.length > 0) {
+    finalRanked = siglipCandidates.filter(c => c.qualityScore >= 25);
+  } else {
+    // Fallback heuristic scoring
+    finalRanked = validPreFiltered
+      .map(c => evaluateCandidateWithRelevance(c, keywordObj))
+      .filter(c => c.isValid);
+    finalRanked.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
+  }
+
+  // Take top requested limit (Default 10 images per keyword)
+  const topCandidates = finalRanked.slice(0, limit);
+  return topCandidates;
 }
 
 // Download image locally to categorized folder & validate dimensions
@@ -348,7 +405,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // URLs to try: primary selected URL, then thumbnail if available
   const urlsToTry = [selectedImageUrl];
   const matchingCand = keywordObj.candidates?.find(c => c.url === selectedImageUrl);
   if (matchingCand && matchingCand.thumbnail && matchingCand.thumbnail !== selectedImageUrl) {
@@ -389,7 +445,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
 
   const sizeBytes = buffer.length;
 
-  // Inspect real dimensions with image-size
   let dimensions = { width: 0, height: 0, type: 'jpg' };
   try {
     const dim = sizeOf(buffer);
@@ -409,7 +464,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
     }
   }
 
-  // Determine file extension
   let ext = dimensions.type || customExt || 'jpg';
   if (ext === 'jpeg') ext = 'jpg';
   const cleanFilename = `${keywordObj.code}_${keywordObj.slug}.${ext}`;
@@ -418,7 +472,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
 
   fs.writeFileSync(targetPath, buffer);
 
-  // Update metadata file
   updateMetadata(keywordObj, {
     savedPath: relativePath,
     fullPath: targetPath,
@@ -444,7 +497,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
   };
 }
 
-// Load or initialize metadata
 export function loadMetadata() {
   if (!fs.existsSync(DATASET_DIR)) {
     fs.mkdirSync(DATASET_DIR, { recursive: true });
@@ -459,7 +511,6 @@ export function loadMetadata() {
   return {};
 }
 
-// Save metadata entry
 export function updateMetadata(keywordObj, info) {
   const meta = loadMetadata();
   meta[keywordObj.code] = {

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently -k -n \"SIGLIP,SERVER,CLIENT\" -c \"magenta,blue,green\" \"npm run siglip\" \"npm run server\" \"npm run client\"",
+    "siglip": "python server/siglip2_service.py",
     "server": "node server/index.js",
     "client": "vite",
     "build": "vite build",

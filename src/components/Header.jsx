@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight } from 'lucide-react';
+import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight, Cpu } from 'lucide-react';
 
 export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOpenFolder }) {
   return (
@@ -34,7 +34,7 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
           <nav className="flex items-center bg-matcha-100/70 p-1.5 rounded-full border border-matcha-200/80 shadow-inner">
             <button
               onClick={() => setActiveTab('crawl')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
                 activeTab === 'crawl'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
@@ -48,8 +48,38 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
             </button>
 
             <button
+              onClick={() => setActiveTab('remix')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+                activeTab === 'remix'
+                  ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
+                  : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 opacity-80 text-amber-300" />
+              <span>Remix Room</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'remix' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
+                studio
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('testing')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+                activeTab === 'testing'
+                  ? 'bg-emerald-950 text-emerald-200 shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/30'
+                  : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Testing</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'testing' ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-200 text-emerald-900'}`}>
+                dev mode
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('library')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
                 activeTab === 'library'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
@@ -64,7 +94,7 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
 
             <button
               onClick={() => setActiveTab('welcome')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
                 activeTab === 'welcome'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
@@ -74,21 +104,6 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
               <span>Welcome</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'welcome' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
                 intro
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('remix')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
-                activeTab === 'remix'
-                  ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
-                  : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 opacity-80 text-amber-300" />
-              <span>Remix Room</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'remix' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                studio
               </span>
             </button>
           </nav>
