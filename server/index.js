@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { loadKeywords } from './keywords.js';
 import { crawlKeywordImages, downloadAndSaveImage, loadMetadata } from './crawler.js';
 import { generateOutfitRecommendation } from './rag.js';
+import { evaluateCulturalGuardrail, evaluateBatchGuardrail } from './cultural_guardrail.js';
+import { buildGuardrailKnowledge } from './knowledge_loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -261,6 +263,59 @@ app.get('/api/styling-rules', (req, res) => {
     } else {
       res.status(404).json({ success: false, message: 'Không tìm thấy file phoi do.txt' });
     }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 10. STEP 5: Cultural Guardrail Evaluation (Chốt Chặn Văn Hóa)
+app.post('/api/cultural-guardrail', async (req, res) => {
+  const { image, context } = req.body;
+  if (!image) {
+    return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ảnh (image path, base64 hoặc URL)' });
+  }
+
+  try {
+    const evaluation = await evaluateCulturalGuardrail(image, context || {});
+    res.json(evaluation);
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Lỗi khi thực hiện thẩm định văn hóa'
+    });
+  }
+});
+
+// 11. STEP 5: Batch Cultural Guardrail Evaluation (Thẩm định 4 Options)
+app.post('/api/cultural-guardrail/batch', async (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Danh sách items không hợp lệ' });
+  }
+
+  try {
+    const results = await evaluateBatchGuardrail(items);
+    res.json({
+      success: true,
+      total: results.length,
+      results
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Lỗi khi thẩm định hàng loạt'
+    });
+  }
+});
+
+// 12. Get Cultural Rules & Taxonomy Overview
+app.get('/api/cultural-rules', (req, res) => {
+  try {
+    const knowledge = buildGuardrailKnowledge(req.query || {});
+    res.json({
+      success: true,
+      knowledge
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
