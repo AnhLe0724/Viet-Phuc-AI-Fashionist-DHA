@@ -12,32 +12,9 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DATASET_DIR = path.join(ROOT_DIR, 'dataset');
 const METADATA_FILE = path.join(DATASET_DIR, 'metadata.json');
 
-const SIGLIP_SERVICE_URL = 'http://127.0.0.1:5001';
-
-// Ensure dataset dir exists
-if (!fs.existsSync(DATASET_DIR)) {
-  fs.mkdirSync(DATASET_DIR, { recursive: true });
-}
-
-// User-Agents
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0'
-];
-
-function getRandomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-
-// Check SigLIP 2 service health
-export async function checkSigLipHealth() {
-  try {
-    const res = await axios.get(`${SIGLIP_SERVICE_URL}/health`, { timeout: 1500 });
-    return res.data;
-  } catch (e) {
-    return { status: 'offline', ready: false, is_loading: false, error: e.message };
-  }
+// Check crawler status
+export async function checkCrawlerHealth() {
+  return { status: 'ready', mode: 'Built-in Vision Evaluator' };
 }
 
 // 1. Bing Image Search Scraper
@@ -282,35 +259,7 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
   };
 }
 
-// Call Google SigLIP 2 Python Service to score and rank candidates
-async function scoreWithSigLip2(keywordObj, candidates) {
-  try {
-    const payload = {
-      keyword: keywordObj.withAccent,
-      keywordNoAccent: keywordObj.withoutAccent,
-      category: keywordObj.category?.nameVi || 'Cổ phục Việt Nam',
-      candidates: candidates.map(c => ({
-        url: c.url,
-        thumbnail: c.thumbnail,
-        title: c.title,
-        width: c.width || 0,
-        height: c.height || 0,
-        domain: c.domain || '',
-        source: c.source || ''
-      }))
-    };
-
-    const res = await axios.post(`${SIGLIP_SERVICE_URL}/score-candidates`, payload, { timeout: 12000 });
-    if (res.data && res.data.success && Array.isArray(res.data.candidates) && res.data.candidates.length > 0) {
-      return res.data.candidates;
-    }
-  } catch (err) {
-    console.warn(`[SigLIP 2 Service Warning]: ${err.message}. Using fallback evaluation.`);
-  }
-  return null;
-}
-
-// Fetch top 10 best images for a keyword with Google SigLIP 2 AI Screening
+// Fetch top 10 best images for a keyword with Smart Quality Screening
 export async function crawlKeywordImages(keywordObj, limit = 10) {
   const queriesToRun = [];
 
@@ -376,20 +325,11 @@ export async function crawlKeywordImages(keywordObj, limit = 10) {
     return true;
   });
 
-  // Try Google SigLIP 2 AI multi-modal zero-shot scoring
-  const siglipCandidates = await scoreWithSigLip2(keywordObj, validPreFiltered.slice(0, 25));
-
-  let finalRanked = [];
-
-  if (siglipCandidates && siglipCandidates.length > 0) {
-    finalRanked = siglipCandidates.filter(c => c.qualityScore >= 25);
-  } else {
-    // Fallback heuristic scoring
-    finalRanked = validPreFiltered
-      .map(c => evaluateCandidateWithRelevance(c, keywordObj))
-      .filter(c => c.isValid);
-    finalRanked.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
-  }
+  // Evaluate & rank candidates with relevance and resolution scoring
+  const finalRanked = validPreFiltered
+    .map(c => evaluateCandidateWithRelevance(c, keywordObj))
+    .filter(c => c.isValid);
+  finalRanked.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
 
   // Take top requested limit (Default 10 images per keyword)
   const topCandidates = finalRanked.slice(0, limit);

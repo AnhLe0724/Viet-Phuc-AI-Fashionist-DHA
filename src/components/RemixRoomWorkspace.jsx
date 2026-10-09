@@ -5,7 +5,7 @@ import {
   Shirt, Scissors, Heart, Compass, ArrowUpRight, CheckCircle2,
   Palette, Camera, Copy, Eye, Flame, Moon, Sparkle, Cpu
 } from 'lucide-react';
-import womanImg from '../human model/woman 1.png';
+import manImg from '../human model/man 1.jpg';
 import MarkdownRenderer from './MarkdownRenderer';
 
 // 1. Initial suggestion bubbles when NO outfit has been chosen yet (Gợi ý chọn hoàn cảnh / vóc dáng)
@@ -762,8 +762,8 @@ Tôi được trang bị toàn bộ **Cẩm nang 1,270 quy tắc phối đồ di
               {/* Model Image with Smooth Crossfade */}
               <div className="relative h-full w-auto max-h-[540px] 2xl:max-h-[660px] flex items-center justify-center">
                 <img
-                  src={tryonMode === 'vton' && tryonResultUrl ? tryonResultUrl : womanImg}
-                  alt="Người mẫu woman 1.png (Mobile-VTON)"
+                  src={tryonMode === 'vton' && tryonResultUrl ? tryonResultUrl : manImg}
+                  alt="Người mẫu man 1.jpg"
                   className={`h-full w-auto max-h-[540px] 2xl:max-h-[660px] object-contain scale-[1.38] origin-center transform-gpu drop-shadow-[0_25px_50px_rgba(0,0,0,0.95)] transition-all duration-500 ${
                     isTryingOn ? 'opacity-70 blur-[1px]' : 'opacity-100'
                   }`}

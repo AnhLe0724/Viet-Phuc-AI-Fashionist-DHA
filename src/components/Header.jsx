@@ -73,7 +73,7 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
               <Cpu className="w-3.5 h-3.5 text-emerald-400" />
               <span>Testing</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'testing' ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-200 text-emerald-900'}`}>
-                dev mode
+                img2img
               </span>
             </button>
 

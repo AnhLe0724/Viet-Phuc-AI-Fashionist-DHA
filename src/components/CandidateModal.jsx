@@ -45,8 +45,8 @@ export default function CandidateModal({
 
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-full text-[11px] font-semibold text-emerald-800">
-              <Cpu className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-              <span>Google SigLIP 2 Vision AI Sàng Lọc</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Smart Vision Thẩm Định & Sàng Lọc</span>
             </div>
             <button
               onClick={onClose}
@@ -95,7 +95,7 @@ export default function CandidateModal({
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-matcha-700" />
                   <span className="text-sm font-fashion font-bold text-matcha-950">
-                    Top {candidates.length} Tác Phẩm Tuyển Chọn Bằng Google SigLIP 2 AI:
+                    Top {candidates.length} Tác Phẩm Tuyển Chọn Chất Lượng Cao:
                   </span>
                 </div>
                 <span className="text-xs text-matcha-600 font-sans">
@@ -133,7 +133,7 @@ export default function CandidateModal({
 
                         {siglipVal > 0 && (
                           <span className="px-1.5 py-0.2 rounded-md text-[8.5px] font-bold bg-black/75 text-emerald-300 backdrop-blur-sm border border-emerald-500/40">
-                            SigLIP: {siglipVal}%
+                            HD: {siglipVal}%
                           </span>
                         )}
                       </div>
@@ -213,8 +213,8 @@ export default function CandidateModal({
             {candidates[selectedIdx] ? (
               <span>
                 Đang chọn: <strong className="text-matcha-950 font-fashion text-sm">Ứng viên #{selectedIdx + 1}</strong>
-                {candidates[selectedIdx]?.siglipScore && (
-                  <span className="ml-2 text-emerald-700 font-semibold">(Độ khớp SigLIP 2: {candidates[selectedIdx].siglipScore}%)</span>
+                {candidates[selectedIdx] && (
+                  <span className="ml-2 text-emerald-700 font-semibold">(Độ nét & Thẩm định: {candidates[selectedIdx].siglipScore || candidates[selectedIdx].qualityScore || 85}%)</span>
                 )}
               </span>
             ) : (

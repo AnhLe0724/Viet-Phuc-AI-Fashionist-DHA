@@ -51,7 +51,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('testing'); // 'crawl' | 'remix' | 'testing' | 'library' | 'welcome'
+  const [activeTab, setActiveTab] = useState('crawl'); // 'crawl' | 'remix' | 'library' | 'welcome'
   const [keywords, setKeywords] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);

@@ -80,18 +80,18 @@ export default function CrawlDataWorkspace({
                 Collection 2026 • 100 Pièces
               </span>
               
-              {/* SigLIP 2 AI Badge */}
+              {/* Smart Vision Filter Badge */}
               <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-full text-[10px] font-bold shadow-sm">
-                <Cpu className="w-3.5 h-3.5 animate-pulse" />
-                <span>Google SigLIP 2 AI • 10 Ảnh/Keyword</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Smart Vision Filter • 10 Ảnh/Keyword</span>
               </div>
             </div>
             
             <h1 className="text-2xl sm:text-4xl lg:text-5xl font-fashion font-bold text-matcha-950 tracking-tight leading-none">
-              Kho Lưu Trữ <span className="font-curvy font-normal text-3xl sm:text-5xl text-matcha-600 lowercase block sm:inline">di sản</span> & Sàng Lọc AI
+              Kho Lưu Trữ <span className="font-curvy font-normal text-3xl sm:text-5xl text-matcha-600 lowercase block sm:inline">di sản</span> & Sàng Lọc HD
             </h1>
             <p className="text-xs sm:text-sm text-matcha-800/80 mt-3 max-w-2xl font-sans leading-relaxed">
-              Thu thập tự động 10 ứng viên ảnh chất lượng cao cho mỗi keyword Cổ phục Việt Nam, tích hợp mô hình <strong>Google SigLIP 2 Vision AI</strong> đa phương thức để chấm điểm độ khớp & kiểm định độ phân giải.
+              Thu thập tự động 10 ứng viên ảnh chất lượng cao cho mỗi keyword Cổ phục Việt Nam, tích hợp bộ lọc thông minh đa nguồn thẩm định độ phân giải & độ sắc nét HD.
             </p>
           </div>
 
@@ -214,7 +214,7 @@ export default function CrawlDataWorkspace({
               onClick={onBatchSaveTop}
               disabled={readyToSelectCount === 0 || loadingStates.batchSave}
               className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300 shadow-sm transition disabled:opacity-40"
-              title="Lưu ảnh Top #1 đã được SigLIP 2 chấm điểm cao nhất"
+              title="Lưu ảnh Top #1 có điểm thẩm định cao nhất"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-800" />
               <span>{loadingStates.batchSave ? 'Đang lưu...' : `Auto-Save (${readyToSelectCount}) Top 1`}</span>
@@ -362,7 +362,7 @@ export default function CrawlDataWorkspace({
                         className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white hover:bg-matcha-50 text-matcha-900 border border-matcha-200 shadow-sm transition disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSearching ? 'animate-spin text-matcha-600' : ''}`} />
-                        <span>{isSearching ? 'Đang lọc 10 ảnh...' : hasCandidates ? 'Lọc lại 10 ảnh' : 'Crawl 10 ảnh SigLIP 2'}</span>
+                        <span>{isSearching ? 'Đang lọc 10 ảnh...' : hasCandidates ? 'Lọc lại 10 ảnh' : 'Crawl 10 ảnh HD'}</span>
                       </button>
 
                       {hasCandidates && (
@@ -411,7 +411,7 @@ export default function CrawlDataWorkspace({
                                 </span>
 
                                 <span className="px-1.5 py-0.2 rounded-md text-[8.5px] font-bold bg-white/95 text-emerald-800 border border-emerald-200 shadow-sm">
-                                  {siglipScore}% SigLIP
+                                  {siglipScore}% HD
                                 </span>
                               </div>
 
@@ -502,7 +502,7 @@ export default function CrawlDataWorkspace({
                       {kw.candidates.length > 5 && (
                         <div className="mt-3.5 pt-3 border-t border-matcha-100 flex items-center justify-between text-xs">
                           <span className="text-matcha-700">
-                            Đang hiển thị 5/{kw.candidates.length} ứng viên tốt nhất được sàng lọc bởi Google SigLIP 2.
+                            Đang hiển thị 5/{kw.candidates.length} ứng viên tốt nhất được sàng lọc tự động.
                           </span>
                           <button
                             onClick={() => onOpenCandidateModal(kw)}
@@ -529,7 +529,7 @@ export default function CrawlDataWorkspace({
                         className="mt-3 px-5 py-2 rounded-full text-xs font-bold bg-matcha-900 hover:bg-matcha-800 text-cream-50 shadow-sm transition disabled:opacity-50"
                       >
                         <Search className="w-3.5 h-3.5 inline mr-1.5" />
-                        {isSearching ? 'Đang tra cứu...' : 'Crawl 10 ảnh SigLIP 2 ngay'}
+                        {isSearching ? 'Đang tra cứu...' : 'Crawl 10 ảnh HD ngay'}
                       </button>
                     </div>
                   )}

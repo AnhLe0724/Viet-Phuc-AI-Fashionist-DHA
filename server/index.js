@@ -6,8 +6,9 @@ import { exec, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { loadKeywords } from './keywords.js';
-import { crawlKeywordImages, downloadAndSaveImage, loadMetadata, checkSigLipHealth } from './crawler.js';
+import { crawlKeywordImages, downloadAndSaveImage, loadMetadata } from './crawler.js';
 import { generateOutfitRecommendation } from './rag.js';
+import { optimizeFashionPrompt, executeImageToImage } from './img2img.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,20 +51,6 @@ syncWithDisk();
 app.use('/api/dataset', express.static(DATASET_DIR));
 app.use('/api/human-model', express.static(path.join(ROOT_DIR, 'src', 'human model')));
 app.use('/api/clothes', express.static(path.join(ROOT_DIR, 'src', 'clothes')));
-
-// Helper: Check SigLIP 2 / Mobile-VTON Python Service status
-function checkServiceStatus() {
-  checkSigLipHealth().then(status => {
-    if (status.status === 'ready') {
-      console.log(`[AI Suite] Python SigLIP 2 + Mobile-VTON đang hoạt động (${status.device || 'GPU/CPU'}) - Model: ${status.model_name}`);
-    } else {
-      console.log('[AI Suite] Python AI Service đang khởi động hoặc chưa sẵn sàng...');
-    }
-  }).catch(() => {});
-}
-
-// Initial status check
-setTimeout(checkServiceStatus, 2000);
 
 // 1. Get all keywords with status & categories
 app.get('/api/keywords', (req, res) => {
@@ -211,12 +198,13 @@ app.post('/api/batch-save-top', async (req, res) => {
   });
 });
 
-// 6. SigLIP 2 AI Service Health & Status
-app.get('/api/siglip-status', async (req, res) => {
-  const status = await checkSigLipHealth();
+// 6. Quality Vision Evaluator Status
+app.get('/api/siglip-status', (req, res) => {
   res.json({
     success: true,
-    ...status
+    status: 'online',
+    ready: true,
+    mode: 'Smart Vision Evaluator'
   });
 });
 
@@ -274,77 +262,51 @@ app.post('/api/chat-remix', async (req, res) => {
   }
 });
 
-// 8.5 Mobile-VTON Virtual Try-On Endpoint
-app.post('/api/try-on', async (req, res) => {
-  const { topCode, topUrl, topName, bottomCode, bottomUrl, bottomName } = req.body;
-  const metadata = loadMetadata();
-  
-  // Resolve top image path
-  let resolvedTopPath = null;
-  if (topCode && metadata[topCode] && metadata[topCode].fullPath && fs.existsSync(metadata[topCode].fullPath)) {
-    resolvedTopPath = metadata[topCode].fullPath;
-  } else if (topUrl && topUrl.startsWith('/api/dataset/')) {
-    const rel = topUrl.replace('/api/dataset/', '');
-    const candidatePath = path.join(DATASET_DIR, rel);
-    if (fs.existsSync(candidatePath)) resolvedTopPath = candidatePath;
-  }
-  if (!resolvedTopPath) {
-    const defaultShirt = path.join(ROOT_DIR, 'src', 'clothes', 'shirt.png');
-    if (fs.existsSync(defaultShirt)) resolvedTopPath = defaultShirt;
-  }
-
-  // Resolve bottom image path
-  let resolvedBottomPath = null;
-  if (bottomCode && metadata[bottomCode] && metadata[bottomCode].fullPath && fs.existsSync(metadata[bottomCode].fullPath)) {
-    resolvedBottomPath = metadata[bottomCode].fullPath;
-  } else if (bottomUrl && bottomUrl.startsWith('/api/dataset/')) {
-    const rel = bottomUrl.replace('/api/dataset/', '');
-    const candidatePath = path.join(DATASET_DIR, rel);
-    if (fs.existsSync(candidatePath)) resolvedBottomPath = candidatePath;
-  }
-
+// 8.5 Image-to-Image AI Prompt Optimizer
+app.post('/api/img2img/optimize-prompt', async (req, res) => {
+  const { garmentName, garmentCategory, styleTags, userPrompt, humanDescription, layers } = req.body;
   try {
-    const response = await axios.post('http://127.0.0.1:5001/api/try-on', {
-      topImagePath: resolvedTopPath,
-      bottomImagePath: resolvedBottomPath,
-      topName: topName || 'Áo Cổ Phục',
-      bottomName: bottomName || 'Quần / Váy Cổ Phục'
-    }, { timeout: 15000 });
-
-    res.json(response.data);
+    const result = await optimizeFashionPrompt({
+      garmentName,
+      garmentCategory,
+      styleTags,
+      userPrompt,
+      humanDescription,
+      layers
+    });
+    res.json(result);
   } catch (err) {
-    console.warn('[VTON Endpoint Error]:', err.message);
+    console.warn('[Prompt Optimizer Route Error]:', err.message);
     res.status(500).json({
       success: false,
-      error: err.message,
-      message: 'Không thể kết nối dịch vụ Mobile-VTON AI (port 5001)'
+      message: err.message || 'Lỗi khi tối ưu hóa prompt'
     });
   }
 });
 
-// 8.6 Mobile-VTON Custom Try-On Testing Endpoint
-app.post('/api/vton-custom', async (req, res) => {
-  const { humanImage, garmentImage, garmentType, garmentName } = req.body;
+// 8.6 Image-to-Image Virtual Try-On Execution (Gemini 3.0 Pro Image)
+app.post('/api/img2img/generate', async (req, res) => {
+  const { humanImage, garmentImage, prompt, garmentName, size } = req.body;
+  
+  if (!humanImage) {
+    return res.status(400).json({ success: false, message: 'Thiếu dữ liệu hình ảnh người mẫu' });
+  }
 
   try {
-    const response = await axios.post('http://127.0.0.1:5001/api/vton-custom', {
-      humanImage,
-      garmentImage,
-      garmentType: garmentType || 'top',
-      garmentName: garmentName || 'Trang phục thử nghiệm'
-    }, { 
-      timeout: 25000,
-      maxContentLength: 50 * 1024 * 1024,
-      maxBodyLength: 50 * 1024 * 1024
+    const result = await executeImageToImage({
+      humanImageSource: humanImage,
+      garmentImageSource: garmentImage,
+      prompt,
+      garmentName,
+      size: size || '1024x1024'
     });
-
-    res.json(response.data);
+    res.json(result);
   } catch (err) {
-    console.warn('[VTON Custom Endpoint Error]:', err.message);
+    console.warn('[Image-to-Image Generation Error]:', err.message);
     res.status(500).json({
       success: false,
       error: err.message,
-      message: 'Lỗi xử lý Virtual Try-On cho ảnh tùy chỉnh (port 5001)'
+      message: err.message || 'Lỗi khi kết xuất ảnh Image-to-Image từ Cloud AI'
     });
   }
 });
