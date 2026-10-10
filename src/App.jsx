@@ -4,7 +4,9 @@ import CrawlDataWorkspace from './components/CrawlDataWorkspace';
 import WelcomeWorkspace from './components/WelcomeWorkspace';
 import LibraryWorkspace from './components/LibraryWorkspace';
 import RemixRoomWorkspace from './components/RemixRoomWorkspace';
+import DressingRoomWorkspace from './components/DressingRoomWorkspace';
 import TestingWorkspace from './components/TestingWorkspace';
+import LookbookWorkspace from './components/LookbookWorkspace';
 import CandidateModal from './components/CandidateModal';
 
 class ErrorBoundary extends React.Component {
@@ -51,7 +53,8 @@ export default function App() {
 }
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('crawl'); // 'crawl' | 'remix' | 'library' | 'welcome'
+  const [activeTab, setActiveTab] = useState('welcome'); // 'welcome' (default) | 'remix' | 'library' | 'lookbook'
+  const [initialRemixLayers, setInitialRemixLayers] = useState(null);
   const [keywords, setKeywords] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -240,7 +243,7 @@ function AppContent() {
 
       {/* Main Workspace Area (Expansive 2560x1600 Support) */}
       <main className={`flex-1 w-full mx-auto px-4 sm:px-6 2xl:px-8 ${
-        activeTab === 'remix' || activeTab === 'welcome' ? 'max-w-[2500px] pt-3 pb-3' : 'max-w-7xl 2xl:max-w-[2400px] pt-4'
+        activeTab === 'dressing' || activeTab === 'remix' || activeTab === 'welcome' || activeTab === 'stylist' ? 'max-w-[2500px] pt-3 pb-3' : 'max-w-7xl 2xl:max-w-[2400px] pt-4'
       }`}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-36 space-y-4">
@@ -252,11 +255,47 @@ function AppContent() {
             {activeTab === 'welcome' && (
               <WelcomeWorkspace
                 keywords={keywords}
-                onStartRemix={() => setActiveTab('remix')}
+                onStartRemix={() => setActiveTab('dressing')}
                 onGoToLibrary={() => setActiveTab('library')}
+                onGoToLookbook={() => setActiveTab('lookbook')}
               />
             )}
 
+            {activeTab === 'dressing' && (
+              <DressingRoomWorkspace />
+            )}
+
+            {activeTab === 'remix' && (
+              <RemixRoomWorkspace
+                initialLayers={initialRemixLayers}
+                onOpenFolder={() => handleOpenFolder()}
+              />
+            )}
+
+            {activeTab === 'library' && (
+              <LibraryWorkspace
+                keywords={keywords}
+                savedCount={savedCount}
+                onSwitchToRemix={() => setActiveTab('remix')}
+                onOpenFolder={() => handleOpenFolder()}
+                onDeleteKeyword={(id) => {
+                  setKeywords(prev => prev.filter(k => k.id !== id && k.code !== id));
+                  showToast('Đã xóa món đồ khỏi Thư Viện');
+                }}
+              />
+            )}
+
+            {activeTab === 'lookbook' && (
+              <LookbookWorkspace
+                onGoToRemix={() => setActiveTab('remix')}
+                onRemixAgain={(layers) => {
+                  setInitialRemixLayers(layers);
+                  setActiveTab('remix');
+                }}
+              />
+            )}
+
+            {/* Hidden developer fallbacks */}
             {activeTab === 'crawl' && (
               <CrawlDataWorkspace
                 keywords={keywords}
@@ -269,23 +308,6 @@ function AppContent() {
                 onOpenCandidateModal={(kw) => setModalKeyword(kw)}
                 onOpenFolder={handleOpenFolder}
                 loadingStates={loadingStates}
-              />
-            )}
-
-            {activeTab === 'library' && (
-              <LibraryWorkspace
-                keywords={keywords}
-                savedCount={savedCount}
-                onSwitchToRemix={() => setActiveTab('remix')}
-                onSwitchToCrawl={() => setActiveTab('crawl')}
-                onOpenFolder={() => handleOpenFolder()}
-              />
-            )}
-
-            {activeTab === 'remix' && (
-              <RemixRoomWorkspace
-                savedCount={savedCount}
-                onSwitchToCrawl={() => setActiveTab('crawl')}
               />
             )}
 

@@ -3,7 +3,7 @@ import {
   BookOpen, Layers, Search, Sparkles, Filter, CheckCircle2, 
   ExternalLink, Eye, ArrowRight, ShieldCheck, Tag, Info, 
   FolderOpen, Star, AlertTriangle, Check, Compass, SlidersHorizontal,
-  ChevronRight, Copy, Share2, RefreshCw, X
+  ChevronRight, Copy, Share2, RefreshCw, X, Trash2
 } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -12,7 +12,8 @@ export default function LibraryWorkspace({
   savedCount = 0, 
   onSwitchToRemix, 
   onSwitchToCrawl,
-  onOpenFolder 
+  onOpenFolder,
+  onDeleteKeyword
 }) {
   // Top level mode: 'costumes' (Thư viện Trang Phục) | 'rules' (Quy Tắc Phối Đồ)
   const [activeSubTab, setActiveSubTab] = useState('costumes');
@@ -22,6 +23,7 @@ export default function LibraryWorkspace({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'saved' | 'crawled'
   const [selectedCostume, setSelectedCostume] = useState(null);
+  const [deletedItemIds, setDeletedItemIds] = useState(new Set());
 
   // Search & Filter States for Rules
   const [rulesContent, setRulesContent] = useState('');
@@ -31,7 +33,7 @@ export default function LibraryWorkspace({
   const [viewRawMarkdown, setViewRawMarkdown] = useState(false);
   const [copiedRule, setCopiedRule] = useState(false);
 
-  // Fetch phoi do.txt rules content
+  // Fetch Heritage Styling Rules content from Knowledge Base
   useEffect(() => {
     const fetchRules = async () => {
       setRulesLoading(true);
@@ -66,9 +68,33 @@ export default function LibraryWorkspace({
     return Array.from(map.values());
   }, [keywords]);
 
+  // Handle Delete Costume from Library
+  const handleDeleteItem = async (e, item) => {
+    if (e) e.stopPropagation();
+    const itemName = item.withAccent || item.name || item.code || 'trang phục';
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${itemName}" khỏi Thư Viện không?`)) return;
+
+    try {
+      const targetId = item.id || item.code;
+      const res = await fetch(`/api/library/item/${targetId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setDeletedItemIds(prev => new Set([...prev, item.id, item.code]));
+        if (selectedCostume?.id === item.id) setSelectedCostume(null);
+        if (onDeleteKeyword) onDeleteKeyword(item.id);
+      } else {
+        alert(data.message || 'Không thể xóa món đồ');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi xóa món đồ khỏi Thư Viện');
+    }
+  };
+
   // Filtered Costumes
   const filteredCostumes = useMemo(() => {
     return keywords.filter(kw => {
+      if (deletedItemIds.has(kw.id) || deletedItemIds.has(kw.code)) return false;
+
       // Category filter
       if (selectedCategory !== 'all' && kw.category?.id !== selectedCategory) {
         return false;
@@ -89,9 +115,9 @@ export default function LibraryWorkspace({
 
       return true;
     });
-  }, [keywords, selectedCategory, statusFilter, costumeSearch]);
+  }, [keywords, selectedCategory, statusFilter, costumeSearch, deletedItemIds]);
 
-  // Parsed structured rules from phoi do.txt
+  // Parsed structured rules from Knowledge Base chapters
   const parsedRules = useMemo(() => {
     if (!rulesContent) return [];
     
@@ -191,8 +217,8 @@ export default function LibraryWorkspace({
               <h2 className="font-fashion text-lg font-bold text-matcha-950 tracking-tight">
                 Thư Viện Tri Thức & Dataset
               </h2>
-              <span className="text-[10px] fashion-badge font-bold px-2.5 py-0.5 rounded-full bg-matcha-100 text-matcha-900 border border-matcha-300">
-                dev mode
+              <span className="text-[10px] fashion-badge font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                Di Sản Cung Đình
               </span>
             </div>
             <p className="text-[11px] text-matcha-700">
@@ -233,7 +259,7 @@ export default function LibraryWorkspace({
             <span className={`text-[10px] px-2 py-0.2 rounded-full font-mono font-semibold ${
               activeSubTab === 'rules' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'
             }`}>
-              phoi do.txt
+              Knowledge Base (10 Chương)
             </span>
           </button>
         </div>
@@ -368,18 +394,27 @@ export default function LibraryWorkspace({
                           </div>
                         )}
 
-                        {/* Top Overlay Badges */}
-                        <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950/80 backdrop-blur-md text-amber-300 border border-white/10 shadow-sm">
+                        {/* Top Overlay Badges & Delete Button */}
+                        <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10">
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950/80 backdrop-blur-md text-amber-300 border border-white/10 shadow-sm pointer-events-none">
                             {item.code}
                           </span>
 
-                          {hasLocalImage && (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-md text-white shadow-sm flex items-center gap-1">
-                              <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              Local
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {hasLocalImage && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-md text-white shadow-sm flex items-center gap-1 pointer-events-none">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                Local
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => handleDeleteItem(e, item)}
+                              title="Xóa món đồ này khỏi Thư Viện"
+                              className="p-1 rounded-full bg-red-950/70 hover:bg-red-600 text-red-200 hover:text-white transition shadow-sm backdrop-blur-md opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Quick Hover Overlay */}
@@ -498,7 +533,7 @@ export default function LibraryWorkspace({
             {rulesLoading ? (
               <div className="h-64 flex items-center justify-center gap-3 text-matcha-700 text-xs">
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>Đang nạp cẩm nang phối đồ phoi do.txt...</span>
+                <span>Đang nạp cẩm nang phối đồ từ Knowledge Base di sản...</span>
               </div>
             ) : viewRawMarkdown ? (
               <div className="p-4 bg-matcha-50/50 rounded-2xl border border-matcha-200 font-mono text-xs leading-relaxed overflow-x-auto">
@@ -648,6 +683,14 @@ export default function LibraryWorkspace({
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                   <span>Phối đồ với trang phục này</span>
+                </button>
+                <button
+                  onClick={(e) => handleDeleteItem(e, selectedCostume)}
+                  className="px-3.5 py-2.5 rounded-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 font-bold text-xs transition flex items-center justify-center gap-1.5 font-sans"
+                  title="Xóa món đồ này khỏi Thư Viện"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa</span>
                 </button>
               </div>
             </div>

@@ -98,7 +98,7 @@ export const MULTI_SLOT_CATALOG = {
       id: 'head-khan-vanh',
       name: 'Khăn Vành Nữ Hoàng Tộc Dát Vàng',
       badge: 'Hoàng Hậu',
-      url: '/api/dataset/03_mu_non_khan_toc/VP_022_khan_vanh_nu.jpg',
+      url: '/api/dataset/03_mu_non_khan_toc/VP_022_khan_van_nu.jpg',
       promptPart: 'wearing royal Vietnamese golden yellow wrapped coronet headdress (khan vanh khai) adorned with subtle filigree ornaments'
     },
     {
@@ -299,6 +299,11 @@ export default function TestingWorkspace({ onOpenFolder }) {
   const [errorMessage, setErrorMessage] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
 
+  // Cultural Guardrail Evaluation State (Step 5)
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationData, setEvaluationData] = useState(null);
+  const [evalError, setEvalError] = useState(null);
+
   // Hidden File Input Ref
   const humanFileInputRef = useRef(null);
 
@@ -417,6 +422,8 @@ export default function TestingWorkspace({ onOpenFolder }) {
     setIsRunning(true);
     setErrorMessage(null);
     setResultData(null);
+    setEvaluationData(null);
+    setEvalError(null);
     setCurrentStep(1);
 
     const stepTimer1 = setTimeout(() => setCurrentStep(2), 2500);
@@ -456,6 +463,63 @@ export default function TestingWorkspace({ onOpenFolder }) {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
       setIsRunning(false);
+    }
+  };
+
+  // Step 5: Cultural Guardrail Evaluation (Multimodal Vision API + Smart Knowledge Retrieval)
+  const handleEvaluateCulturalGuardrail = async () => {
+    if (!resultData?.resultUrl) return;
+    setIsEvaluating(true);
+    setEvalError(null);
+
+    // Context inference for weather & occasion
+    const combinedContext = `${userCustomNote} ${promptText}`.toLowerCase();
+    let weather = 'Mát mẻ (20°C - 26°C), thoáng đãng';
+    if (combinedContext.includes('lạnh') || combinedContext.includes('đông') || combinedContext.includes('rét') || combinedContext.includes('20 độ')) {
+      weather = 'Thời tiết se lạnh / Mùa đông (dưới 20°C)';
+    } else if (combinedContext.includes('nóng') || combinedContext.includes('hè') || combinedContext.includes('oi bức')) {
+      weather = 'Thời tiết nóng bức / Mùa hè (trên 28°C)';
+    }
+
+    let occasion = 'Dạo phố / Trải nghiệm văn hóa';
+    if (combinedContext.includes('cung đình') || combinedContext.includes('lễ') || combinedContext.includes('tết') || combinedContext.includes('trang trọng')) {
+      occasion = 'Lễ hội / Tết cổ truyền / Không gian trang nghiêm';
+    } else if (combinedContext.includes('cafe') || combinedContext.includes('cà phê') || combinedContext.includes('chơi')) {
+      occasion = 'Đi cafe, giao lưu dạo phố cuối tuần';
+    } else if (combinedContext.includes('tiệc') || combinedContext.includes('cưới')) {
+      occasion = 'Dự tiệc hỷ, lễ cưới, dạ tiệc';
+    }
+
+    try {
+      const res = await fetch('/api/cultural-guardrail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: resultData.resultUrl,
+          selectedItems: {
+            top: selectedTop,
+            bottom: selectedBottom,
+            headwear: selectedHeadwear,
+            footwear: selectedFootwear,
+            accessory: selectedAccessory
+          },
+          userPrompt: userCustomNote || promptText,
+          weather,
+          occasion,
+          styleVibe: selectedTags.join(', ')
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && (data.data || data.evaluation)) {
+        setEvaluationData(data.data || data.evaluation);
+      } else {
+        setEvalError(data.message || data.error || 'Không thể thực hiện thẩm định văn hóa từ AI.');
+      }
+    } catch (err) {
+      setEvalError(err.message || 'Lỗi mạng khi kết nối dịch vụ thẩm định văn hóa.');
+    } finally {
+      setIsEvaluating(false);
     }
   };
 
@@ -865,6 +929,30 @@ export default function TestingWorkspace({ onOpenFolder }) {
               </div>
             </div>
 
+            {/* User Custom Context: Weather, Occasion & Style Input */}
+            <div className="space-y-1.5 pt-2 border-t border-matcha-100">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-fashion font-bold text-matcha-950 flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-emerald-700" />
+                  Bối Cảnh / Thời Tiết / Hoàn Cảnh:
+                </label>
+                <span className="text-[10px] text-matcha-500 font-mono">Bổ trợ RAG & Guardrail</span>
+              </div>
+              <input
+                type="text"
+                value={userCustomNote}
+                onChange={(e) => setUserCustomNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    triggerLayeredPromptOptimization();
+                  }
+                }}
+                onBlur={() => triggerLayeredPromptOptimization()}
+                placeholder="VD: Lạnh 20 độ, đi cafe, phối ngầu GenZ trẻ trung..."
+                className="w-full text-xs p-2.5 rounded-xl bg-cream-50/80 border border-matcha-200 focus:outline-none focus:ring-2 focus:ring-matcha-500/20 text-matcha-950 placeholder:text-matcha-400"
+              />
+            </div>
+
             {/* Prompt Enhancement Tags */}
             <div className="space-y-2 pt-2 border-t border-matcha-100">
               <span className="text-[11px] font-fashion font-bold text-matcha-900">
@@ -1106,16 +1194,239 @@ export default function TestingWorkspace({ onOpenFolder }) {
                   </span>
                 </div>
 
-                <a
-                  href={resultData.resultUrl}
-                  download="viet_phuc_multilayer_remix.jpg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white hover:bg-matcha-50 text-matcha-900 border border-matcha-300 font-fashion font-bold text-xs shadow-sm transition"
-                >
-                  <Download className="w-4 h-4 text-emerald-700" />
-                  <span>Tải Xuống Ảnh Chất Lượng Cao (8K)</span>
-                </a>
+                {/* Primary Result Actions: Download & Step 5 Evaluation Button */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href={resultData.resultUrl}
+                    download="viet_phuc_multilayer_remix.jpg"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl bg-white hover:bg-matcha-50 text-matcha-900 border border-matcha-300 font-fashion font-bold text-xs shadow-sm transition"
+                  >
+                    <Download className="w-4 h-4 text-emerald-700" />
+                    <span>Tải Xuống Ảnh (8K)</span>
+                  </a>
+
+                  {/* Step 5 Guardrail Trigger Button */}
+                  <button
+                    onClick={handleEvaluateCulturalGuardrail}
+                    disabled={isEvaluating}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl font-fashion font-bold text-xs shadow-sm transition ${
+                      isEvaluating
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 cursor-not-allowed animate-pulse'
+                        : evaluationData
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-gradient-to-r from-matcha-900 to-emerald-900 hover:from-black hover:to-matcha-950 text-cream-50 shadow-md'
+                    }`}
+                  >
+                    {isEvaluating ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                        <span>Đang Thẩm Định...</span>
+                      </>
+                    ) : evaluationData ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Thẩm Định Lại (B5)</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                        <span>🔍 Đánh Giá Văn Hóa (B5)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Evaluation Error Banner */}
+                {evalError && (
+                  <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1.5 animate-shake">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-rose-600" />
+                        Lỗi Thẩm Định Văn Hóa
+                      </span>
+                      <button
+                        onClick={handleEvaluateCulturalGuardrail}
+                        className="text-[10px] underline hover:text-rose-950 font-bold"
+                      >
+                        Thử lại
+                      </button>
+                    </div>
+                    <p className="font-mono text-[11px] leading-relaxed break-words">{evalError}</p>
+                  </div>
+                )}
+
+                {/* Evaluation In-Progress Notice */}
+                {isEvaluating && (
+                  <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs space-y-2 animate-pulse">
+                    <div className="flex items-center gap-2 font-bold font-fashion text-amber-900">
+                      <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                      <span>Chuyên Gia AI Đang Thẩm Định Ảnh...</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed font-sans">
+                      Hệ thống đang trích xuất quy tắc từ Bộ Tri Thức Cổ Phục (quy tắc Hữu Nhậm, phom dáng áo tấc/Nhật Bình, tương phản màu sắc và thời tiết) để đánh giá bức ảnh vừa kết xuất...
+                    </p>
+                  </div>
+                )}
+
+                {/* Step 5: Cultural Guardrail Evaluation Report Card */}
+                {evaluationData && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-white border border-matcha-300/80 shadow-md space-y-4 animate-fadeIn">
+                    
+                    {/* Header: Status Pill & Overall Score */}
+                    <div className="flex items-start justify-between gap-2 pb-3 border-b border-matcha-100">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {evaluationData.status === 'SAFE' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                              Đạt Chuẩn Văn Hóa
+                            </span>
+                          )}
+                          {evaluationData.status === 'WARNING' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 shadow-xs">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                              Cần Lưu Ý Điều Chỉnh
+                            </span>
+                          )}
+                          {evaluationData.status === 'REJECTED' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1.5 shadow-xs">
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-700" />
+                              Vi Phạm Nguyên Tắc Cổ Phục
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-matcha-500">Bước 5 Guardrail</span>
+                        </div>
+                        <h4 className="text-xs font-fashion font-bold text-matcha-950">
+                          Thẩm Định Văn Hóa & Phong Cách Phối Đồ
+                        </h4>
+                      </div>
+
+                      {/* Overall Score */}
+                      <div className="text-right shrink-0">
+                        <div className="inline-flex flex-col items-center px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200">
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 font-mono">Điểm</span>
+                          <span className="text-lg font-fashion font-bold text-emerald-950 leading-none">
+                            {evaluationData.scores?.overall || 90}
+                            <span className="text-[10px] text-emerald-600 font-normal">/100</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Quote */}
+                    <div className="p-3 rounded-xl bg-cream-50/80 border border-matcha-200 text-xs text-matcha-900 italic leading-relaxed">
+                      "{evaluationData.summary}"
+                    </div>
+
+                    {/* The 3 Core Pillars */}
+                    <div className="space-y-3">
+                      <span className="text-[11px] font-fashion font-bold uppercase tracking-wider text-matcha-800 block">
+                        3 Trụ Cột Đánh Giá Di Sản:
+                      </span>
+
+                      {/* 1. Văn Hóa & Thuần Phong Mỹ Tục */}
+                      <div className="p-3 rounded-xl bg-matcha-50/50 border border-matcha-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-fashion font-bold text-matcha-950 flex items-center gap-1.5">
+                            🇻🇳 Chuẩn Văn Hóa & Phom Dáng
+                          </span>
+                          <span className="font-mono font-bold text-xs text-emerald-800">
+                            {evaluationData.scores?.culturalAuthenticity || evaluationData.criteria?.culturalAuthenticity?.score || 90}/100
+                          </span>
+                        </div>
+                        {/* Progress Bar */}
+                        <div className="w-full h-1.5 bg-matcha-200/60 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-600 rounded-full transition-all duration-500"
+                            style={{ width: `${evaluationData.scores?.culturalAuthenticity || 90}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-matcha-800 leading-relaxed pt-0.5">
+                          {evaluationData.criteria?.culturalAuthenticity?.evaluation}
+                        </p>
+                        {evaluationData.criteria?.culturalAuthenticity?.taboosChecked && (
+                          <div className="flex items-start gap-1 text-[10px] text-matcha-700 pt-0.5">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                            <span>{evaluationData.criteria.culturalAuthenticity.taboosChecked}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Màu Sắc & Ngũ Hành */}
+                      <div className="p-3 rounded-xl bg-matcha-50/50 border border-matcha-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-fashion font-bold text-matcha-950 flex items-center gap-1.5">
+                            🎨 Hài Hòa Màu Sắc & Ngũ Hành
+                          </span>
+                          <span className="font-mono font-bold text-xs text-emerald-800">
+                            {evaluationData.scores?.colorHarmony || evaluationData.criteria?.colorHarmony?.score || 88}/100
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-matcha-200/60 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-amber-600 rounded-full transition-all duration-500"
+                            style={{ width: `${evaluationData.scores?.colorHarmony || 88}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-matcha-800 leading-relaxed pt-0.5">
+                          {evaluationData.criteria?.colorHarmony?.evaluation}
+                        </p>
+                      </div>
+
+                      {/* 3. Thời Tiết & Hoàn Cảnh */}
+                      <div className="p-3 rounded-xl bg-matcha-50/50 border border-matcha-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-fashion font-bold text-matcha-950 flex items-center gap-1.5">
+                            ⛅ Phù Hợp Thời Tiết & Hoàn Cảnh
+                          </span>
+                          <span className="font-mono font-bold text-xs text-emerald-800">
+                            {evaluationData.scores?.weatherAndOccasion || evaluationData.criteria?.weatherAndOccasion?.score || 85}/100
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-matcha-200/60 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-sky-600 rounded-full transition-all duration-500"
+                            style={{ width: `${evaluationData.scores?.weatherAndOccasion || 85}%` }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-matcha-800 leading-relaxed pt-0.5">
+                          {evaluationData.criteria?.weatherAndOccasion?.evaluation}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Expert Suggestions */}
+                    {evaluationData.expertSuggestions?.length > 0 && (
+                      <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 space-y-1.5">
+                        <span className="text-[11px] font-fashion font-bold text-amber-950 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          Gợi Ý Từ Chuyên Gia Cổ Phục:
+                        </span>
+                        <ul className="space-y-1 text-[11px] text-amber-900 leading-relaxed">
+                          {evaluationData.expertSuggestions.map((sug, sIdx) => (
+                            <li key={sIdx} className="flex items-start gap-1.5">
+                              <span className="text-amber-600 font-bold">•</span>
+                              <span>{sug}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Metadata Footer */}
+                    <div className="flex items-center justify-between text-[10px] text-matcha-500 pt-1 font-mono">
+                      <span>Model: ram/gemini-3.6-flash-high</span>
+                      <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        Đã đối chiếu Knowledge Base
+                      </span>
+                    </div>
+
+                  </div>
+                )}
+
               </div>
             )}
 

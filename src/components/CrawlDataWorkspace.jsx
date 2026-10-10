@@ -80,18 +80,18 @@ export default function CrawlDataWorkspace({
                 Collection 2026 • 100 Pièces
               </span>
               
-              {/* Smart Vision Filter Badge */}
+              {/* Real OpenAI CLIP ViT Filter Badge */}
               <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-full text-[10px] font-bold shadow-sm">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Smart Vision Filter • 10 Ảnh/Keyword</span>
+                <span>OpenAI CLIP ViT Filter • 4 Ảnh Tinh Tuyển/Keyword</span>
               </div>
             </div>
             
             <h1 className="text-2xl sm:text-4xl lg:text-5xl font-fashion font-bold text-matcha-950 tracking-tight leading-none">
-              Kho Lưu Trữ <span className="font-curvy font-normal text-3xl sm:text-5xl text-matcha-600 lowercase block sm:inline">di sản</span> & Sàng Lọc HD
+              Kho Lưu Trữ <span className="font-curvy font-normal text-3xl sm:text-5xl text-matcha-600 lowercase block sm:inline">di sản</span> & Kiểm Định CLIP
             </h1>
             <p className="text-xs sm:text-sm text-matcha-800/80 mt-3 max-w-2xl font-sans leading-relaxed">
-              Thu thập tự động 10 ứng viên ảnh chất lượng cao cho mỗi keyword Cổ phục Việt Nam, tích hợp bộ lọc thông minh đa nguồn thẩm định độ phân giải & độ sắc nét HD.
+              Tiền xử lý tìm kiếm với LLM và Knowledge Base, thu thập đa nguồn và hậu kiểm định bằng mô hình Deep Learning CLIP ViT-B/32, tinh tuyển 4 ảnh chuẩn mực nhất cho mỗi món đồ di sản.
             </p>
           </div>
 
