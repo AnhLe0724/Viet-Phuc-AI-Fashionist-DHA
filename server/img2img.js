@@ -191,43 +191,58 @@ CRITICAL RULES:
   let userContent = '';
   if (layers && Object.keys(layers).length > 0) {
     const layerDescriptions = [];
+    const getColorSpec = (item) => {
+      if (!item || !item.color) return '';
+      const c = item.color;
+      if (typeof c === 'string') return ` [MÀU SẮC ĐƯỢC CHỌN: ${c}]`;
+      if (c.prompt) return ` [SPECIFIC COLOR: ${c.name || ''} - ${c.prompt}]`;
+      if (c.name) return ` [SPECIFIC COLOR: ${c.name}]`;
+      return '';
+    };
+
     if (layers.innerwear && layers.innerwear.id !== 'inner-none') {
       const inName = layers.innerwear.name || layers.innerwear;
       const inPrompt = layers.innerwear.prompt || '';
-      layerDescriptions.push(`- BASE LAYER / INNERWEAR (Áo lót trong / Trung Lĩnh): ${inName}${inPrompt ? ` (${inPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.innerwear);
+      layerDescriptions.push(`- BASE LAYER / INNERWEAR (Áo lót trong / Trung Lĩnh): ${inName}${colorStr}${inPrompt ? ` (${inPrompt})` : ''}`);
     }
     if (layers.top) {
       const topName = layers.top.name || layers.top;
       const topPrompt = layers.top.prompt || '';
-      layerDescriptions.push(`- TOP / OUTER ROBE (Áo ngoài / chính): ${topName}${topPrompt ? ` (${topPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.top);
+      layerDescriptions.push(`- TOP / OUTER ROBE (Áo ngoài / chính): ${topName}${colorStr}${topPrompt ? ` (${topPrompt})` : ''}`);
     }
     if (layers.bottom) {
       const botName = layers.bottom.name || layers.bottom;
       const botPrompt = layers.bottom.prompt || '';
-      layerDescriptions.push(`- BOTTOM / PANTS / SKIRT (Quần/Xiêm): ${botName}${botPrompt ? ` (${botPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.bottom);
+      layerDescriptions.push(`- BOTTOM / PANTS / SKIRT (Quần/Xiêm): ${botName}${colorStr}${botPrompt ? ` (${botPrompt})` : ''}`);
     }
     if (layers.headwear && layers.headwear.id !== 'head-none') {
       const headName = layers.headwear.name || layers.headwear;
       const headPrompt = layers.headwear.prompt || '';
-      layerDescriptions.push(`- HEADWEAR / HAT / TURBAN (Mũ/Khăn): ${headName}${headPrompt ? ` (${headPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.headwear);
+      layerDescriptions.push(`- HEADWEAR / HAT / TURBAN (Mũ/Khăn): ${headName}${colorStr}${headPrompt ? ` (${headPrompt})` : ''}`);
     }
     if (layers.footwear) {
       const footName = layers.footwear.name || layers.footwear;
       const footPrompt = layers.footwear.prompt || '';
-      layerDescriptions.push(`- FOOTWEAR / SHOES (Giày/Hài/Guốc): ${footName}${footPrompt ? ` (${footPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.footwear);
+      layerDescriptions.push(`- FOOTWEAR / SHOES (Giày/Hài/Guốc): ${footName}${colorStr}${footPrompt ? ` (${footPrompt})` : ''}`);
     }
     
     // Support multiple accessories (array or single object)
     if (Array.isArray(layers.accessories)) {
       const validAccs = layers.accessories.filter(a => a && a.id !== 'acc-none');
       if (validAccs.length > 0) {
-        const accTexts = validAccs.map(a => `${a.name || a}${a.prompt ? ` (${a.prompt})` : ''}`).join(', ');
+        const accTexts = validAccs.map(a => `${a.name || a}${getColorSpec(a)}${a.prompt ? ` (${a.prompt})` : ''}`).join(', ');
         layerDescriptions.push(`- ACCESSORIES / JEWELRY (Phụ kiện/Trang sức - Render all): ${accTexts}`);
       }
     } else if (layers.accessory && layers.accessory.id !== 'acc-none') {
       const accName = layers.accessory.name || layers.accessory;
       const accPrompt = layers.accessory.prompt || '';
-      layerDescriptions.push(`- ACCESSORIES (Phụ kiện): ${accName}${accPrompt ? ` (${accPrompt})` : ''}`);
+      const colorStr = getColorSpec(layers.accessory);
+      layerDescriptions.push(`- ACCESSORIES (Phụ kiện): ${accName}${colorStr}${accPrompt ? ` (${accPrompt})` : ''}`);
     }
 
     userContent = `Task: Complex Multi-Item Layered Vietnamese Heritage Outfit Try-On

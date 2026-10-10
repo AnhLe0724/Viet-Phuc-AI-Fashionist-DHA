@@ -7,7 +7,7 @@ import { exec, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { loadKeywords } from './keywords.js';
-import { crawlKeywordImages, downloadAndSaveImage, loadMetadata, checkCrawlerHealth } from './crawler.js';
+import { crawlKeywordImages, downloadAndSaveImage, loadMetadata, checkCrawlerHealth, fetchSlotCandidatesInternetFirst, searchExactCostumeImages, searchCostumeExactStream } from './crawler.js';
 import { generateOutfitRecommendation } from './rag.js';
 import { evaluateCulturalGuardrail, evaluateBatchGuardrail, validatePreGenerationGuardrail } from './cultural_guardrail.js';
 import { buildGuardrailKnowledge } from './knowledge_loader.js';
@@ -604,6 +604,63 @@ app.delete('/api/library/item/:id', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/costumes/search-stream (Real-time SSE progressive streaming for exact costume search)
+app.get('/api/costumes/search-stream', async (req, res) => {
+  const { query, slot, limit = 8 } = req.query;
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) {
+    return res.status(400).send('Query parameter required');
+  }
+
+  // Set SSE Headers
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+
+  let count = 0;
+  try {
+    await searchCostumeExactStream(
+      cleanQ,
+      slot || 'tops',
+      async (candidate) => {
+        count++;
+        res.write(`event: candidate\ndata: ${JSON.stringify(candidate)}\n\n`);
+        if (res.flush) res.flush();
+      },
+      Number(limit) || 8
+    );
+
+    res.write(`event: done\ndata: ${JSON.stringify({ total: count, query: cleanQ })}\n\n`);
+    res.end();
+  } catch (err) {
+    console.warn('[Costumes Search Stream Error]:', err.message);
+    res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
+    res.end();
+  }
+});
+
+// POST /api/costumes/search-google (Fast Exact Keyword Search fallback for Costumes)
+app.post('/api/costumes/search-google', async (req, res) => {
+  const { query, slot, limit = 8 } = req.body;
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) {
+    return res.status(400).json({ success: false, message: 'Từ khóa tìm kiếm không được để trống' });
+  }
+  try {
+    const candidates = await searchExactCostumeImages(cleanQ, slot || 'tops', Number(limit) || 8);
+    res.json({
+      success: true,
+      count: candidates.length,
+      data: candidates
+    });
+  } catch (err) {
+    console.warn('[Costumes Exact Search Error]:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Lỗi khi tìm kiếm trên Web' });
   }
 });
 

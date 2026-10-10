@@ -65,32 +65,33 @@ def download_image_pil(url, thumbnail=None, timeout=5):
     return None
 
 def score_candidates_core(query: str, candidates: list, kb_hint: str = "", exclude_types: list = None):
-    if kb_hint and len(kb_hint.strip()) > 5:
-        enhanced_text = f"a photograph of authentic Vietnamese traditional {query}. {kb_hint.strip()[:200]}"
-    else:
-        enhanced_text = f"a detailed photograph of authentic Vietnamese traditional costume: {query}"
+    from concurrent.futures import ThreadPoolExecutor
 
-    negative_text = "modern sneakers, western high heels, athletic shoes, oxford dress shoes, western clothing, chinese hanfu, cartoon, anime, clipart"
+    if kb_hint and len(kb_hint.strip()) > 5:
+        enhanced_text = f"a clear centered photograph of authentic Vietnamese traditional costume {query}, sharp focus, studio lookbook centerpiece. {kb_hint.strip()[:180]}"
+    else:
+        enhanced_text = f"a high quality sharp centered photograph of authentic Vietnamese traditional garment {query}, clothing portrait, fashion centerpiece"
+
+    negative_text = "towels, bath towel, packaging box, carton, construction helmet, athletic shoes, soccer jersey, modern casual t-shirt, western clothing, cartoon, anime, clipart, blurry, noisy, low resolution, meme"
     if exclude_types and len(exclude_types) > 0:
         negative_text += ", " + ", ".join(exclude_types)
 
     with torch.no_grad():
-        text_inputs = processor(text=[enhanced_text, negative_text], return_tensors="pt", padding=True).to(DEVICE)
+        text_inputs = processor(text=[enhanced_text, negative_text], return_tensors="pt", padding=True, truncation=True, max_length=77).to(DEVICE)
         text_out = model.get_text_features(**text_inputs)
         text_features = text_out.pooler_output if hasattr(text_out, 'pooler_output') else (text_out[1] if isinstance(text_out, tuple) else text_out)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         pos_features = text_features[0:1]
         neg_features = text_features[1:2]
 
+    # Pre-filter candidate list
+    clean_candidates = []
     results = []
 
     for item in candidates:
         url = item.get('url', '')
         thumb = item.get('thumbnail', '')
         title = item.get('title', '')
-        item_id = item.get('id', '')
-
-        # Basic filter
         lower_url = url.lower()
         lower_title = (title or '').lower()
         combo_text = f"{lower_title} {lower_url}"
@@ -104,7 +105,6 @@ def score_candidates_core(query: str, candidates: list, kb_hint: str = "", exclu
             })
             continue
 
-        # Check explicit exclude_types
         is_excluded = False
         if exclude_types:
             for ex in exclude_types:
@@ -121,13 +121,24 @@ def score_candidates_core(query: str, candidates: list, kb_hint: str = "", exclu
         if is_excluded:
             continue
 
-        pil_img = download_image_pil(url, thumb)
+        clean_candidates.append(item)
+
+    # Download clean candidate images in parallel (fast!)
+    def fetch_item_pil(cand):
+        pil_img = download_image_pil(cand.get('url', ''), cand.get('thumbnail', ''), timeout=4)
+        return (cand, pil_img)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        downloaded_items = list(executor.map(fetch_item_pil, clean_candidates))
+
+    # Evaluate downloaded images through CLIP model
+    for item, pil_img in downloaded_items:
         if pil_img is None:
             results.append({
                 **item,
-                'clipScore': 55,
+                'clipScore': 50,
                 'isValid': True,
-                'clipMessage': 'CLIP đánh giá cơ bản (Ảnh không tải được trực tiếp)'
+                'clipMessage': 'CLIP đánh giá cơ bản'
             })
             continue
 
@@ -142,28 +153,40 @@ def score_candidates_core(query: str, candidates: list, kb_hint: str = "", exclu
                 neg_sim = (image_features @ neg_features.T).item()
                 diff = pos_sim - neg_sim
 
-                # If image looks distinctly like negative category (e.g. sneaker/oxford when searching for traditional shoe)
-                kb_penalty = 0
-                if diff < 0.02:
-                    kb_penalty = int(min(45, (0.02 - diff) * 200))
+                # Aspect ratio & resolution penalty/boost
+                w, h = pil_img.size
+                ratio = w / max(1, h)
+                center_bonus = 0
+                if 0.5 <= ratio <= 1.8:  # Good fashion portrait or product ratio
+                    center_bonus += 5
+                if w >= 500 and h >= 500:
+                    center_bonus += 5
 
-                base_score = ((pos_sim - 0.12) / 0.18) * 45 + 55
-                norm_score = int(max(20, min(99, base_score - kb_penalty)))
+                penalty = 0
+                if diff < -0.01:
+                    penalty = 35
+                elif diff < 0.02:
+                    penalty = int((0.02 - diff) * 150)
 
-                is_valid = norm_score >= 50 and (neg_sim < pos_sim + 0.04)
+                base_score = ((pos_sim - 0.10) / 0.20) * 50 + 50
+                norm_score = int(max(15, min(99, base_score - penalty + center_bonus)))
+
+                is_valid = norm_score >= 45 and (neg_sim < pos_sim + 0.05)
 
                 results.append({
                     **item,
                     'clipScore': norm_score,
                     'cosineSimilarity': round(pos_sim, 4),
                     'contrastiveDiff': round(diff, 4),
+                    'width': w,
+                    'height': h,
                     'isValid': is_valid,
                     'clipMessage': f'CLIP ViT: {norm_score}% (Sim: {pos_sim:.3f}, Diff: {diff:.3f})'
                 })
         except Exception as e:
             results.append({
                 **item,
-                'clipScore': 60,
+                'clipScore': 55,
                 'isValid': True,
                 'clipMessage': f'CLIP Fallback ({str(e)})'
             })

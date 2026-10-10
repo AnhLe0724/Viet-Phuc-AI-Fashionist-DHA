@@ -1,5 +1,4 @@
-import React from 'react';
-import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight, Cpu, Crown } from 'lucide-react';
+import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight, Cpu, Crown, Shirt, Bot } from 'lucide-react';
 
 export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOpenFolder }) {
   return (
@@ -35,10 +34,27 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
           </div>
 
           {/* Top Horizontal Navigation Tabs (Haute Couture Capsule) */}
-          <nav className="flex items-center bg-matcha-100/70 p-1.5 rounded-full border border-matcha-200/80 shadow-inner">
+          <nav className="flex items-center bg-matcha-100/70 p-1.5 rounded-full border border-matcha-200/80 shadow-inner overflow-x-auto max-w-full">
+            {/* 1. Dressing Room (MỚI) */}
+            <button
+              onClick={() => setActiveTab('dressing')}
+              className={`flex items-center gap-2 px-4.5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shrink-0 ${
+                activeTab === 'dressing'
+                  ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
+                  : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
+              }`}
+            >
+              <Shirt className="w-3.5 h-3.5 text-amber-300" />
+              <span>Dressing Room</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'dressing' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
+                phối đồ
+              </span>
+            </button>
+
+            {/* 3. Remix Room (GIỮ NGUYÊN) */}
             <button
               onClick={() => setActiveTab('remix')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shrink-0 ${
                 activeTab === 'remix'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
@@ -47,13 +63,14 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               <span>Remix Room</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'remix' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                studio
+                gốc
               </span>
             </button>
 
+            {/* 4. Library */}
             <button
               onClick={() => setActiveTab('library')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shrink-0 ${
                 activeTab === 'library'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
@@ -66,9 +83,10 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
               </span>
             </button>
 
+            {/* 5. Lookbook */}
             <button
               onClick={() => setActiveTab('lookbook')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shrink-0 ${
                 activeTab === 'lookbook'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'

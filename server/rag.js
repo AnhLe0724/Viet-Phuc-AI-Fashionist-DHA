@@ -3,7 +3,7 @@ import path from 'path';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { loadKeywords, removeVietnameseTones } from './keywords.js';
-import { loadMetadata, crawlForSlot, fetchSlotCandidatesInternetFirst, evaluateCandidatesWithCLIP, mergeWithDiversity } from './crawler.js';
+import { loadMetadata, crawlForSlot, fetchSlotCandidatesInternetFirst, evaluateCandidatesWithCLIP, mergeWithDiversity, searchExactCostumeImages } from './crawler.js';
 import { buildRagKnowledgeContext } from './knowledge_loader.js';
 import { fashionLibrary } from './fashion_library.js';
 import { loadHeritageStylingRules } from './styling_rules_loader.js';
@@ -102,12 +102,12 @@ export function retrieveRelevantKnowledge(userQuery, fullKnowledge) {
 
   scoredSections.sort((a, b) => b.score - a.score);
 
-  // Pick top 4-6 most relevant sections
-  const topSections = scoredSections.slice(0, 5).filter(s => s.score > 0).map(s => s.text);
+  // Pick top 3 most relevant sections
+  const topSections = scoredSections.slice(0, 3).filter(s => s.score > 0).map(s => s.text);
   
   if (topSections.length === 0) {
-    // Return first 3000 chars as general overview
-    return fullKnowledge.slice(0, 4000);
+    // Return first 2200 chars as general overview
+    return fullKnowledge.slice(0, 2200);
   }
 
   return topSections.join('\n\n---\n\n');
@@ -158,6 +158,7 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
     category: item.category || 'Việt Phục',
     badge: isAiRecommended ? '👑 AI Khuyên Dùng #1' : (item.badge || '✨ Kho Di Sản'),
     url: item.imageUrl || item.url || '/api/clothes/viet_phuc_sample.jpg',
+    thumbnail: item.thumbnail || item.imageUrl || item.url || '/api/clothes/viet_phuc_sample.jpg',
     reason: item.reason || 'Món đồ chuẩn mực từ kho lưu trữ di sản.',
     clipScore: isAiRecommended ? 98 : (item.clipScore || 95),
     promptPart: `${item.nameNoAccent || item.name} fashion garment`
@@ -167,7 +168,8 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
   const slots = ['innerwear', 'tops', 'bottoms', 'headwear', 'footwear', 'accessories'];
   const result = {};
 
-  for (const slotKey of slots) {
+  // Fetch all 6 slots in parallel for sub-second response speed
+  await Promise.all(slots.map(async (slotKey) => {
     const singularKey = slotKey === 'tops' ? 'top' : slotKey === 'bottoms' ? 'bottom' : slotKey === 'accessories' ? 'accessory' : slotKey;
 
     // 1. Get AI recommendation for this slot
@@ -182,21 +184,10 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
       ...(Array.isArray(recItem?.excludeTypes) ? recItem.excludeTypes : [])
     ];
 
-    // Fallback heuristic excludes for traditional footwear if not set
-    if (singularKey === 'footwear') {
-      if (queryNoAccent.includes('hai') || (targetSubcat && removeVietnameseTones(targetSubcat).includes('hai'))) {
-        ['sneaker', 'giày thể thao', 'oxford', 'giày tây', 'cao gót', 'chunky', 'combat boots'].forEach(ex => {
-          if (!excludeKeywords.includes(ex)) excludeKeywords.push(ex);
-        });
-      }
-    }
-
-    // Fallback heuristic excludes for innerwear (strictly undergarments, NO outer coats / robes)
     if (singularKey === 'innerwear') {
       const innerExcludes = [
         'áo khoác', 'khoác', 'áo khoác dạ', 'blazer', 'bomber', 'biker', 'măng tô',
-        'jacket', 'cardigan', 'hoodie', 'áo đối khâm', 'đối khâm', 'nhật bình', 'áo tấc',
-        'coat', 'overcoat', 'áo gió', 'parka', 'áo len dày'
+        'jacket', 'cardigan', 'hoodie', 'áo đối khâm', 'đối khâm', 'nhật bình', 'áo tấc'
       ];
       innerExcludes.forEach(ex => {
         if (!excludeKeywords.includes(ex)) excludeKeywords.push(ex);
@@ -207,24 +198,12 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
     const seenNames = new Set();
     const seenUrls = new Set();
 
-    // 2. KHO NỘI BỘ: CHỈ LẤY TỐI ĐA 1 ITEM CHUẨN (Anchor)
-    // Strictly limit to 1 item from local library
-    const libCandidates = fashionLibrary.getSlotCandidates(singularKey, targetSubcat || userQuery, 1, excludeKeywords);
-    let localAnchor = null;
-    if (libCandidates.length > 0) {
-      localAnchor = formatLibItemToCandidate(libCandidates[0], false);
-    }
-
-    // 3. TẬP TRUNG LẤY TỪ INTERNET: Thu thập 8-10 items trên internet cho từng slot
+    // 2. ƯU TIÊN TRA CỨU ẢNH TRANG PHỤC THỰC TẾ TỪ WEB THEO KNOWLEDGE BASE
     try {
-      const queryItem = recItem || {
-        slot: singularKey,
-        name: singularKey === 'innerwear' ? 'áo yếm lót trong' : targetSubcat,
-        targetSubcategory: targetSubcat
-      };
-      const internetCandidates = await fetchSlotCandidatesInternetFirst(queryItem, userQuery, 10);
-      for (const c of internetCandidates) {
-        const normName = removeVietnameseTones(c.title || c.name || '');
+      const searchQuery = recItem?.searchHints?.[0] || targetSubcat || userQuery;
+      const webMatches = await searchExactCostumeImages(searchQuery, singularKey, 3);
+      for (const c of webMatches) {
+        const normName = removeVietnameseTones(c.name || '');
         const cleanUrl = (c.url || '').split('?')[0].toLowerCase();
         if (!seenNames.has(normName) && !seenUrls.has(cleanUrl) && c.url) {
           seenNames.add(normName);
@@ -232,25 +211,38 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
           candidatePool.push({
             id: `cand-web-${singularKey}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             code: `WEB_${singularKey.toUpperCase()}`,
-            name: c.title || targetSubcat,
-            category: c.domain ? `🌐 Web: ${c.domain}` : '🌐 Trực Tuyến',
-            badge: c.qualityBadge || '🌐 Khám Phá Mới',
+            name: c.name,
+            category: c.category || '🌐 Web Search',
+            badge: c.badge || '🌐 Trực Tuyến',
             url: c.url,
-            reason: `Hình ảnh tuyển chọn từ Internet (${c.domain || 'Web'}), đã thẩm định qua CLIP.`,
-            clipScore: c.clipScore || 88,
-            promptPart: `${c.title || targetSubcat} authentic traditional look`
+            thumbnail: c.thumbnail || c.url,
+            reason: `Hình ảnh tra cứu tự động từ Web dựa trên tri thức di sản.`,
+            clipScore: c.clipScore || 90,
+            promptPart: `${c.name} authentic traditional look`
           });
         }
       }
     } catch (err) {
-      console.warn(`[fetchSlotCandidatesInternetFirst ${slotKey}] Error:`, err.message);
+      console.warn(`[Fast web candidates error for ${slotKey}]:`, err.message);
     }
 
-    // 4. Nếu AI có gợi ý món #1 cụ thể, đưa lên vị trí danh dự đầu tiên
+    // 3. Dự phòng & Bổ sung từ Fashion Library / Dataset nếu còn chỗ trống
+    if (candidatePool.length < 4) {
+      const libCandidates = fashionLibrary.getSlotCandidates(singularKey, targetSubcat || userQuery, 4 - candidatePool.length, excludeKeywords);
+      for (const libIt of libCandidates) {
+        const formatted = formatLibItemToCandidate(libIt, false);
+        const nName = removeVietnameseTones(formatted.name);
+        if (!seenNames.has(nName)) {
+          seenNames.add(nName);
+          candidatePool.push(formatted);
+        }
+      }
+    }
+
+    // 4. Món AI gợi ý #1 đưa lên vị trí danh dự đầu tiên
     let topAiItem = null;
     if (recItem && recItem.name) {
-      // Use image from first internet match if recItem doesn't have an image
-      const bestImgUrl = recItem.imageUrl || candidatePool[0]?.url || localAnchor?.url || '/api/clothes/viet_phuc_sample.jpg';
+      const bestImgUrl = recItem.imageUrl || candidatePool[0]?.url || '/api/clothes/viet_phuc_sample.jpg';
       topAiItem = {
         id: `cand-ai-${slotKey}-${Date.now()}`,
         code: recItem.code || `REC_${singularKey.toUpperCase()}`,
@@ -258,6 +250,7 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
         category: recItem.categoryName || (candidatePool[0]?.category || 'AI Tuyển Chọn'),
         badge: '👑 AI Khuyên Dùng #1',
         url: bestImgUrl,
+        thumbnail: recItem.thumbnail || bestImgUrl,
         reason: recItem.reason || 'Lựa chọn chuẩn mực và sắc sảo nhất cho concept bạn mong muốn.',
         clipScore: 98,
         promptPart: `${recItem.name} detailed aesthetic garment`
@@ -265,28 +258,18 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
       seenNames.add(removeVietnameseTones(recItem.name));
     }
 
-    // 5. Kết hợp: 1 món kho chuẩn (nếu có) + các món internet
-    const combinedPool = [];
-    if (localAnchor && !seenNames.has(removeVietnameseTones(localAnchor.name))) {
-      combinedPool.push(localAnchor);
-      seenNames.add(removeVietnameseTones(localAnchor.name));
-    }
-    for (const c of candidatePool) {
-      combinedPool.push(c);
-    }
+    // 5. Kết hợp
+    const combinedPool = [...candidatePool];
 
-    // 6. Áp dụng MMR-Lite Diversity để chọn 3-4 món đa dạng nhất
     let diverseFinal = [];
     if (topAiItem) {
-      // Pick 3 diverse items to accompany topAiItem
       const restPool = combinedPool.filter(c => removeVietnameseTones(c.name) !== removeVietnameseTones(topAiItem.name));
-      const diverseRest = mergeWithDiversity(restPool, 3);
-      diverseFinal = [topAiItem, ...diverseRest];
+      diverseFinal = [topAiItem, ...restPool.slice(0, 3)];
     } else {
-      diverseFinal = mergeWithDiversity(combinedPool, 4);
+      diverseFinal = combinedPool.slice(0, 4);
     }
 
-    // 7. Fallback đảm bảo luôn có đủ 4 items
+    // 6. Fallback đảm bảo đủ items
     if (diverseFinal.length < 4) {
       const extraLib = fashionLibrary.getSlotCandidates(singularKey, '', 4, excludeKeywords);
       for (const ex of extraLib) {
@@ -300,7 +283,7 @@ export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiR
     }
 
     result[slotKey] = diverseFinal.slice(0, 4);
-  }
+  }));
 
   return result;
 }
@@ -327,8 +310,8 @@ Hãy trò chuyện bằng Tiếng Việt với phong cách của một Haute Cou
 3. 📸 Mẹo tạo dáng & Thần thái: Gợi ý 1-2 mẹo tạo dáng, góc máy hoặc thần thái khi chụp ảnh để người mặc tự tin và nổi bật nhất.
 
 QUY TẮC RAG BẮT BUỘC:
-- Tận dụng tài liệu cẩm nang phối đồ và các file chuyên sâu trích xuất từ Knowledge Base (Kỹ thuật Layering xếp lớp, Triết lý "Ngoại thâm nội bạch", Áo Trung Lĩnh, Áo Cánh Lót, quy chuẩn Hữu Nhậm, v.v.).
-- Ưu tiên các món trang phục/phụ kiện có trong kho lưu trữ dataset và thư viện thời trang.
+- Tận dụng sâu sắc tài liệu cẩm nang phối đồ và các quy chuẩn di sản trích xuất từ Knowledge Base (Kỹ thuật Layering xếp lớp, Triết lý "Ngoại thâm nội bạch", Áo Trung Lĩnh, Áo Cánh Lót, quy chuẩn Hữu Nhậm, phối màu di sản, thích ứng thời tiết và hoàn cảnh sự kiện).
+- KHÔNG BỊ RÀNG BUỘC CỨNG NHẮC theo danh mục thư viện nội bộ: Bạn hoàn toàn tự do sáng tạo, đề xuất những mẫu trang phục và phụ kiện chân thực, chuẩn xác nhất theo Knowledge Base. Hệ thống sẽ tự động ưu tiên tìm kiếm và đối chiếu ảnh phục trang thực tế trên Web theo từng món đồ bạn đề xuất.
 - QUY TẮC ĐẶC BIỆT CHO LỚP MẶC TRONG (slot: "innerwear"): Đây là các loại áo mặc lót bên trong (Áo Yếm lụa/yếm đào, Áo Ba Lỗ cotton/may-ô/tank top lót trong, Áo Cộc Tay Lót cotton mỏng/undershirt, Áo Cánh Lót phin trắng, Áo Trung Lĩnh lót cổ đứng ló viền, Áo Hai Dây Lụa Camisole). TUYỆT ĐỐI KHÔNG chọn áo khoác, blazer, bomber, măng tô, áo đối khâm, áo tấc, áo dài hay áo ngoài cho slot innerwear.
 - TUYỆT ĐỐI KHÔNG phán quẻ bói toán, KHÔNG nói chuyện mê tín phong thủy rườm rà. KHÔNG xuất thẻ \`\`\`color_palettes\`\`\`.
 
@@ -410,14 +393,14 @@ QUY TẮC RAG BẮT BUỘC:
         model: model,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1800
+        max_tokens: 1200
       },
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 12000
+        timeout: 28000
       }
     );
 
@@ -434,41 +417,59 @@ QUY TẮC RAG BẮT BUỘC:
       }
     }
 
-    // Enhance outfitData with real image URLs from FashionLibrary or catalog, and self-enrich library!
+    // Enhance outfitData with real image URLs - ƯU TIÊN ẢNH THỰC TẾ TRÊN MẠNG THEO KNOWLEDGE BASE
     if (outfitData && Array.isArray(outfitData.recommendedItems)) {
-      outfitData.recommendedItems = outfitData.recommendedItems.map((item) => {
-        // Look up in FashionLibrary first
-        const searchMatches = fashionLibrary.searchLibrary(item.name, item.slot);
-        const match = searchMatches[0];
+      await Promise.all(outfitData.recommendedItems.map(async (item) => {
+        let finalImageUrl = null;
+        let finalThumbnail = null;
+        let finalCode = item.code || null;
+        let finalCategory = item.categoryName || 'Việt Phục Remix';
 
-        let finalImageUrl = match ? match.imageUrl : (item.imageUrl || null);
-        let finalCode = match ? match.code : (item.code || null);
-        let finalCategory = match ? match.category : (item.categoryName || 'Việt Phục Remix');
+        // 1. Ưu tiên hàng đầu: Tự động tra cứu ảnh trang phục thực tế trên Web theo từ khóa
+        try {
+          const webSearchQuery = item.searchHints?.[0] || item.targetSubcategory || item.name;
+          const webResults = await searchExactCostumeImages(webSearchQuery, item.slot, 2);
+          if (webResults.length > 0 && webResults[0].url) {
+            finalImageUrl = webResults[0].url;
+            finalThumbnail = webResults[0].thumbnail || webResults[0].url;
+            finalCategory = webResults[0].category || finalCategory;
+          }
+        } catch (e) {
+          // fallback gracefully
+        }
+
+        // 2. Dự phòng: Nếu Web chưa có hoặc lỗi thì lấy từ FashionLibrary / Dataset
+        if (!finalImageUrl || finalImageUrl.includes('sample')) {
+          const searchMatches = fashionLibrary.searchLibrary(item.name, item.slot);
+          const match = searchMatches[0];
+          if (match && match.imageUrl && !match.imageUrl.includes('sample')) {
+            finalImageUrl = match.imageUrl;
+            finalThumbnail = match.thumbnail || match.imageUrl;
+            finalCode = match.code || finalCode;
+            finalCategory = match.category || finalCategory;
+          }
+        }
 
         if (!finalImageUrl) {
           finalImageUrl = '/api/clothes/viet_phuc_sample.jpg';
         }
 
-        const enrichedItem = {
-          ...item,
-          code: finalCode,
-          name: match ? match.name : item.name,
-          categoryName: finalCategory,
-          imageUrl: finalImageUrl,
-          badge: '👑 AI Khuyên Dùng #1'
-        };
+        item.code = finalCode;
+        item.categoryName = finalCategory;
+        item.imageUrl = finalImageUrl;
+        item.thumbnail = finalThumbnail || finalImageUrl;
+        item.badge = '👑 AI Khuyên Dùng #1';
 
-        // Self-enrich library: permanently store/boost this item in library cache
+        // Tự động lưu/làm giàu Fashion Library để tăng tốc các lần truy vấn tiếp theo
         fashionLibrary.saveOrUpdateItem({
-          name: enrichedItem.name,
-          slot: enrichedItem.slot,
-          imageUrl: enrichedItem.imageUrl,
-          category: enrichedItem.categoryName,
-          reason: enrichedItem.reason
+          name: item.name,
+          slot: item.slot,
+          imageUrl: finalImageUrl,
+          thumbnail: finalThumbnail,
+          category: finalCategory,
+          reason: item.reason
         });
-
-        return enrichedItem;
-      });
+      }));
     }
 
     // Clean text by removing raw JSON block from display message
