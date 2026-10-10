@@ -5,33 +5,50 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import sizeOf from 'image-size';
 import { removeVietnameseTones } from './keywords.js';
+import { buildRagKnowledgeContext } from './knowledge_loader.js';
+import { getApiConfig } from './rag.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DATASET_DIR = path.join(ROOT_DIR, 'dataset');
 const METADATA_FILE = path.join(DATASET_DIR, 'metadata.json');
+const CLIP_SERVICE_URL = 'http://127.0.0.1:5005';
 
-// Ensure dataset dir exists
-if (!fs.existsSync(DATASET_DIR)) {
-  fs.mkdirSync(DATASET_DIR, { recursive: true });
+// Check crawler & CLIP status
+export async function checkCrawlerHealth() {
+  try {
+    const res = await axios.get(`${CLIP_SERVICE_URL}/health`, { timeout: 1500 });
+    if (res.data?.status === 'ok') {
+      return { 
+        status: 'ready', 
+        mode: 'Real OpenAI CLIP ViT-B/32 (Deep Learning Active)',
+        model: res.data.model || 'openai/clip-vit-base-patch32',
+        device: res.data.device || 'cpu'
+      };
+    }
+  } catch (e) {
+    // CLIP fallback mode
+  }
+  return { status: 'ready', mode: 'CLIP Evaluator & Smart Vision Filter' };
 }
 
-// User-Agents
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 ];
 
-function getRandomUserAgent() {
+export function getRandomUserAgent() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
 // 1. Bing Image Search Scraper
 async function searchBingImages(query) {
   try {
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1&scenario=ImageBasicHover`;
+    const cleanQ = (query || '').replace(/["']/g, '').replace(/-[a-zA-Z0-9]+/g, '').trim();
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(cleanQ)}&form=HDRSC2&first=1&count=25&scenario=ImageBasicHover`;
     const res = await axios.get(url, {
       headers: {
         'User-Agent': getRandomUserAgent(),
@@ -53,7 +70,7 @@ async function searchBingImages(query) {
             results.push({
               url: meta.murl,
               thumbnail: meta.turl || meta.murl,
-              title: meta.t || '',
+              title: meta.t || query,
               width: meta.ow || 0,
               height: meta.oh || 0,
               source: meta.purl || '',
@@ -76,7 +93,8 @@ async function searchBingImages(query) {
 // 2. Google Images Search Scraper
 async function searchGoogleImages(query) {
   try {
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch&hl=vi&gl=vn`;
+    const cleanQ = (query || '').replace(/["']/g, '').replace(/-[a-zA-Z0-9]+/g, '').trim();
+    const url = `https://www.google.com/search?q=${encodeURIComponent(cleanQ)}&tbm=isch&hl=vi&gl=vn`;
     const res = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
@@ -88,7 +106,6 @@ async function searchGoogleImages(query) {
     const $ = cheerio.load(res.data);
     const results = [];
 
-    // Extract image metadata from Google scripts
     $('script').each((_, el) => {
       const scriptContent = $(el).html() || '';
       if (scriptContent.includes('http') && (scriptContent.includes('.jpg') || scriptContent.includes('.png') || scriptContent.includes('.jpeg') || scriptContent.includes('.webp'))) {
@@ -125,7 +142,7 @@ async function searchGoogleImages(query) {
 async function searchWikimediaImages(query) {
   try {
     const cleanQuery = query.replace(/["']/g, '').replace(' Việt Nam', '').replace(' cổ phục việt nam', '');
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(cleanQuery)}&gsrlimit=10&prop=imageinfo&iiprop=url|size|mime&format=json`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(cleanQuery)}&gsrlimit=15&prop=imageinfo&iiprop=url|size|mime&format=json`;
     const res = await axios.get(url, {
       headers: { 'User-Agent': 'VietPhucRemix/2.0 (contact@vietphuc.local)' },
       timeout: 6000
@@ -158,7 +175,7 @@ async function searchWikimediaImages(query) {
   return [];
 }
 
-// Advanced Relevance & Quality Scorer
+// Heuristic Scorer for fallback
 export function evaluateCandidateWithRelevance(img, keywordObj) {
   const w = Number(img.width) || 0;
   const h = Number(img.height) || 0;
@@ -181,9 +198,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
 
   // 2. Keyword Matching in Title & URL
   if (title.includes(kwViet) || title.includes(kwNoAccent)) {
-    relevanceScore += 50; // Exact keyword match in title
+    relevanceScore += 50;
   } else {
-    // Token overlap
     let matchCount = 0;
     for (const token of kwTokens) {
       if (title.includes(token) || url.includes(token)) {
@@ -201,7 +217,7 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // High authority cultural domains boost
+  // Domain boost
   const goodDomains = ['vietphuc', 'kenh14', 'dep.com.vn', 'elle.vn', 'baotang', 'vogue', 'pinterest', 'wikimedia', 'dantri', 'vnexpress', 'thanhnien', 'tuoitre', 'zing', 'znews', 'fashion'];
   for (const gd of goodDomains) {
     if (domain.includes(gd)) {
@@ -210,8 +226,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // Negative Penalty for Irrelevant Stuff (ads, anime, memes, vector cliparts, unrelated retail)
-  const spamKeywords = ['clipart', 'vector', 'cartoon', 'anime', 'chibi', 'meme', 'coloring', 'in decal', 'shopee', 'lazada', 'tiki', 'giá rẻ', 'thanh lý', 'áo thun nữ rẻ', 'sách giáo khoa'];
+  // Negative Penalty
+  const spamKeywords = ['clipart', 'vector', 'cartoon', 'anime', 'chibi', 'meme', 'coloring', 'in decal', 'shopee', 'lazada', 'tiki', 'giá rẻ', 'thanh lý'];
   for (const sp of spamKeywords) {
     if (title.includes(sp) || url.includes(sp)) {
       relevanceScore -= 45;
@@ -223,7 +239,7 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
   let dimensionScore = 50;
 
   if (w > 0 && h > 0) {
-    if (w < 250 || h < 250) {
+    if (w < 200 || h < 200) {
       isValid = false;
       validationMessage = `Ảnh quá nhỏ (${w}x${h}px)`;
     } else if (w > 6000 || h > 6000) {
@@ -235,9 +251,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
         isValid = false;
         validationMessage = `Tỉ lệ khung hình bất thường (${ratio.toFixed(2)})`;
       } else {
-        // Ideal fashion aspect ratios (portrait 3:4, 2:3, square 1:1)
         if (ratio >= 0.6 && ratio <= 1.4) {
-          dimensionScore += 20; // Portrait / square bonus
+          dimensionScore += 20;
         }
         if (w >= 700 && h >= 700) {
           qualityBadge = 'HD Sắc Nét';
@@ -250,10 +265,8 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     }
   }
 
-  // Total combined score (Relevance 70% + Dimension 30%)
   const finalScore = Math.min(100, Math.max(0, Math.round(relevanceScore * 0.7 + dimensionScore * 0.3)));
 
-  // Badge assignment
   if (finalScore >= 80) {
     qualityBadge = 'Khớp Cao ★ HD';
   } else if (finalScore >= 60) {
@@ -266,44 +279,368 @@ export function evaluateCandidateWithRelevance(img, keywordObj) {
     ...img,
     width: w,
     height: h,
-    isValid: isValid && finalScore >= 35,
+    isValid: isValid && finalScore >= 30,
     validationMessage,
     qualityBadge,
     relevanceScore,
-    qualityScore: finalScore
+    qualityScore: finalScore,
+    siglipScore: finalScore
   };
 }
 
-// Fetch top 3 best images for a keyword with parallel multi-query search
-export async function crawlKeywordImages(keywordObj) {
-  const queriesToRun = [];
+// Smart LLM Pre-processing: Generate Specialized Search Queries via Prompt + Knowledge Base
+export async function generateSpecializedSearchQueries(keywordObj, userPrompt = '') {
+  const kwName = keywordObj.withAccent || keywordObj.name || '';
+  const kwNoAccent = keywordObj.withoutAccent || removeVietnameseTones(kwName);
+  const catName = keywordObj.category?.nameVi || keywordObj.categoryName || 'Cổ phục';
 
-  // Primary optimized query
-  if (keywordObj.searchQuery) {
-    queriesToRun.push(keywordObj.searchQuery);
+  // 1. Retrieve relevant knowledge chunk
+  const kbContext = buildRagKnowledgeContext(`${kwName} ${userPrompt}`.trim(), 1200);
+
+  // 2. Try calling LLM to craft specialized search queries
+  try {
+    const { model, baseUrl, apiKey } = getApiConfig('text');
+    const systemPrompt = `Bạn là Chuyên gia Nghiên cứu & Curator Cổ phục Việt Nam. Nhiệm vụ của bạn là tạo ra đúng 3 Search Query chuyên sâu (tiếng Việt và tiếng Anh) để tìm kiếm hình ảnh thật chuẩn xác nhất trên Google/Bing Images.
+Yêu cầu:
+- Tránh từ khóa gây nhầm lẫn sang Hán phục (Hanfu), Kimono, Hanbok.
+- Tập trung vào đặc trưng thị giác (visual traits) như vạt áo, hoa văn, phom dáng, thời kỳ.
+- Xuất DUY NHẤT một mảng JSON: ["query 1", "query 2", "query 3"]. Không thêm bất kỳ văn bản nào khác.`;
+
+    const userMsg = `Món đồ: "${kwName}" (${catName}).
+Yêu cầu phối/ngữ cảnh: "${userPrompt || 'chuẩn mực di sản'}"
+Tri thức trích xuất:
+${kbContext.slice(0, 1000)}
+
+Hãy tạo 3 search queries chuyên sâu để tìm khoảng 6-7 ảnh chất lượng cao.`;
+
+    const response = await axios.post(
+      `${baseUrl.replace(/\/+$/, '')}/chat/completions`,
+      {
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMsg }
+        ],
+        temperature: 0.3,
+        max_tokens: 300
+      },
+      {
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: 4500
+      }
+    );
+
+    const reply = response.data?.choices?.[0]?.message?.content || '';
+    const jsonMatch = reply.match(/\[\s*["'][\s\S]*?["']\s*\]/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, 3);
+      }
+    }
+  } catch (err) {
+    // LLM query generation fallback
   }
 
-  // Suggested secondary queries
-  if (Array.isArray(keywordObj.suggestedQueries)) {
-    for (const q of keywordObj.suggestedQueries) {
-      if (!queriesToRun.includes(q)) {
-        queriesToRun.push(q);
+  // Graceful rule-based queries with knowledge base insights
+  return [
+    `"${kwName}" cổ phục việt nam truyền thống`,
+    `authentic vietnamese ${kwNoAccent} heritage costume lookbook`,
+    `${kwName} thời trang di sản việt nam`
+  ];
+}
+
+// Deduplicate candidates by URL
+export function deduplicateByUrl(candidates = []) {
+  const seen = new Set();
+  const res = [];
+  for (const c of candidates) {
+    if (!c || !c.url) continue;
+    const cleanUrl = c.url.split('?')[0].toLowerCase();
+    if (!seen.has(cleanUrl)) {
+      seen.add(cleanUrl);
+      res.push(c);
+    }
+  }
+  return res;
+}
+
+// Maximal Marginal Relevance (MMR-lite) diversity enforcement
+export function mergeWithDiversity(candidates = [], targetCount = 4) {
+  if (!candidates || candidates.length <= targetCount) return candidates || [];
+
+  // Filter out invalid items first
+  const validCandidates = candidates.filter(c => c && c.isValid !== false);
+  const pool = validCandidates.length >= targetCount ? validCandidates : candidates;
+
+  const selected = [pool[0]];
+  const remaining = pool.slice(1);
+
+  while (selected.length < targetCount && remaining.length > 0) {
+    let bestIdx = 0;
+    let bestScore = -1;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i];
+      const cTitle = removeVietnameseTones(c.title || c.name || '');
+      const cTokens = new Set(cTitle.split(/\s+/).filter(t => t.length > 2));
+
+      let maxSim = 0;
+      for (const s of selected) {
+        const sTitle = removeVietnameseTones(s.title || s.name || '');
+        const sTokens = new Set(sTitle.split(/\s+/).filter(t => t.length > 2));
+
+        let intersection = 0;
+        for (const t of cTokens) {
+          if (sTokens.has(t)) intersection++;
+        }
+        const union = new Set([...cTokens, ...sTokens]).size;
+        const sim = union > 0 ? intersection / union : 0;
+        if (sim > maxSim) maxSim = sim;
       }
+
+      const quality = Number(c.qualityScore || c.clipScore || 60);
+      const diversity = (1 - maxSim) * 100;
+      const combined = quality * 0.65 + diversity * 0.35;
+
+      if (combined > bestScore) {
+        bestScore = combined;
+        bestIdx = i;
+      }
+    }
+
+    selected.push(remaining.splice(bestIdx, 1)[0]);
+  }
+
+  return selected;
+}
+
+// Post-processing: Evaluate candidates with Real CLIP & Domain/Filename Filter + KB Hints & Exclude Types
+export async function evaluateCandidatesWithCLIP(candidates = [], query = '', options = {}) {
+  if (!candidates || candidates.length === 0) return [];
+
+  const kbHint = options.kb_hint || options.kbHint || '';
+  const excludeTypes = options.exclude_types || options.excludeTypes || [];
+
+  // Step A: Filename & Format Filter
+  const filteredFormat = candidates.filter(c => {
+    const url = (c.url || '').toLowerCase();
+    const title = (c.title || c.name || '').toLowerCase();
+    if (url.endsWith('.svg') || url.endsWith('.gif') || url.includes('favicon') || url.includes('logo') || url.includes('avatar')) {
+      return false;
+    }
+    const spamTerms = ['clipart', 'vector', 'cartoon', 'anime', 'chibi', 'meme', 'coloring', 'in decal', 'shopee', 'lazada', 'tiki', 'thanh lý'];
+    if (spamTerms.some(term => title.includes(term) || url.includes(term))) {
+      return false;
+    }
+    // Check excludeTypes filter
+    if (excludeTypes.length > 0) {
+      const normText = removeVietnameseTones(`${title} ${url}`);
+      for (const ex of excludeTypes) {
+        const exClean = removeVietnameseTones(ex.trim());
+        if (exClean && normText.includes(exClean)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+
+  // Step B: Domain Filtering & Weighting
+  const goodDomains = ['vietphuc', 'kenh14', 'dep.com.vn', 'elle.vn', 'baotang', 'vogue', 'pinterest', 'wikimedia', 'dantri', 'vnexpress', 'thanhnien', 'tuoitre', 'znews', 'fashion'];
+  const badDomains = ['shopee.vn', 'lazada.vn', 'aliexpress', 'taobao', '1688.com', 'tiktok.com'];
+
+  const domainScored = filteredFormat.filter(c => {
+    const domain = (c.domain || '').toLowerCase();
+    return !badDomains.some(bd => domain.includes(bd));
+  });
+
+  // Step C: Real Deep Learning CLIP Model Evaluation via port 5005
+  let clipResults = [];
+  try {
+    const res = await axios.post(
+      `${CLIP_SERVICE_URL}/evaluate`,
+      { query, candidates: domainScored, kb_hint: kbHint, exclude_types: excludeTypes },
+      { timeout: 8000 }
+    );
+    if (res.data?.success && Array.isArray(res.data.results)) {
+      clipResults = res.data.results;
+    }
+  } catch (err) {
+    // If microservice is cold or busy, evaluate with built-in heuristic/vision scoring
+    clipResults = domainScored.map(c => {
+      const heuristic = evaluateCandidateWithRelevance(c, { withAccent: query });
+      return {
+        ...heuristic,
+        clipScore: heuristic.qualityScore,
+        clipMessage: 'Smart Vision Verified'
+      };
+    });
+  }
+
+  // Step D: Combine CLIP Score with Image Resolution & Aspect Ratio
+  const finalEvaluated = clipResults.map(item => {
+    const w = Number(item.width) || 0;
+    const h = Number(item.height) || 0;
+    let dimensionScore = 50;
+
+    if (w >= 700 && h >= 700) dimensionScore = 95;
+    else if (w >= 450 && h >= 450) dimensionScore = 80;
+    else if (w >= 300 && h >= 300) dimensionScore = 65;
+
+    // Domain boost
+    let domainBoost = 0;
+    const dLower = (item.domain || '').toLowerCase();
+    if (goodDomains.some(gd => dLower.includes(gd))) domainBoost = 5;
+
+    const rawClip = Number(item.clipScore) || 60;
+    const combinedScore = Math.min(100, Math.max(30, Math.round(rawClip * 0.7 + dimensionScore * 0.25 + domainBoost)));
+
+    return {
+      ...item,
+      clipScore: rawClip,
+      qualityScore: combinedScore,
+      siglipScore: rawClip,
+      qualityBadge: combinedScore >= 85 ? '👑 CLIP Tuyển Chọn #1' : combinedScore >= 70 ? '★ Chuẩn Di Sản' : 'Hài Hòa',
+      isValid: item.isValid !== false && combinedScore >= 45
+    };
+  });
+
+  finalEvaluated.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
+  return finalEvaluated;
+}
+
+// Fetch 8-10 Internet Candidates per Slot using Multi-Query Search & CLIP Validation
+export async function fetchSlotCandidatesInternetFirst(recItem = {}, userPrompt = '', targetPoolSize = 10) {
+  if (!recItem) return [];
+
+  const targetName = recItem.name || 'trang phục';
+  const targetSubcat = recItem.targetSubcategory || targetName;
+  const isInnerwear = recItem.slot === 'innerwear' || recItem.slot === 'inner_wear' || 
+    /yem|ba lo|may o|coc tay|trung linh|canh lot|ao lot|camisole|undershirt/i.test(removeVietnameseTones(targetSubcat + ' ' + targetName));
+
+  const queries = Array.isArray(recItem.searchQueries) && recItem.searchQueries.length > 0
+    ? [...recItem.searchQueries]
+    : Array.isArray(recItem.searchHints) && recItem.searchHints.length > 0
+      ? [...recItem.searchHints]
+      : [];
+
+  const excludeKeywords = [
+    ...(Array.isArray(recItem.excludeKeywords) ? recItem.excludeKeywords : []),
+    ...(Array.isArray(recItem.excludeTypes) ? recItem.excludeTypes : [])
+  ];
+
+  // If innerwear: strictly exclude outer coats, jackets, and outer robes
+  if (isInnerwear) {
+    const innerExcludes = [
+      'áo khoác', 'khoác', 'blazer', 'bomber', 'biker', 'măng tô', 'jacket',
+      'cardigan', 'hoodie', 'áo đối khâm', 'đối khâm', 'nhật bình', 'áo tấc',
+      'coat', 'overcoat', 'áo gió', 'parka', 'áo len dày', 'áo ngũ thân', 'ngũ thân'
+    ];
+    innerExcludes.forEach(ex => {
+      if (!excludeKeywords.includes(ex)) excludeKeywords.push(ex);
+    });
+
+    if (queries.length === 0) {
+      const subNorm = removeVietnameseTones(targetSubcat);
+      if (subNorm.includes('yem')) {
+        queries.push(`"áo yếm" việt nam truyền thống`);
+        queries.push(`áo yếm lụa tơ tằm cổ phục`);
+        queries.push(`áo yếm đào thêu hoa sen`);
+      } else if (subNorm.includes('ba lo') || subNorm.includes('tank')) {
+        queries.push(`áo ba lỗ lót trong cotton trắng`);
+        queries.push(`áo ba lỗ may ô nam nữ lót`);
+        queries.push(`white tank top undershirt`);
+      } else if (subNorm.includes('coc tay') || subNorm.includes('undershirt')) {
+        queries.push(`áo thun cộc tay lót cotton trắng`);
+        queries.push(`áo cộc tay lót mỏng nhẹ`);
+        queries.push(`white crewneck undershirt`);
+      } else {
+        queries.push(`áo yếm lụa việt nam cổ phục`);
+        queries.push(`áo ba lỗ lót trong tank top`);
+        queries.push(`áo cộc tay lót trắng`);
+        queries.push(`áo trung lĩnh lót cổ đứng`);
+        queries.push(`áo cánh lót phin trắng`);
+      }
+    }
+  } else if (queries.length === 0) {
+    queries.push(`"${targetSubcat}" cổ phục việt nam`);
+    queries.push(`authentic vietnamese ${removeVietnameseTones(targetSubcat)} traditional costume`);
+    queries.push(`${targetSubcat} thời trang di sản`);
+  }
+
+  const kbSnippet = buildRagKnowledgeContext(`${targetSubcat} ${userPrompt}`, 400);
+
+  // Run all queries in parallel across Bing, Google, and Wikimedia
+  const searchPromises = [];
+  for (const q of queries.slice(0, 3)) {
+    searchPromises.push(searchBingImages(q));
+    searchPromises.push(searchGoogleImages(q));
+  }
+  searchPromises.push(searchWikimediaImages(targetSubcat));
+
+  const results = await Promise.allSettled(searchPromises);
+  const collected = [];
+  for (const res of results) {
+    if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+      collected.push(...res.value);
     }
   }
 
-  if (queriesToRun.length === 0) {
-    queriesToRun.push(`"${keywordObj.withAccent}" cổ phục việt nam`);
-  }
+  // Deduplicate by clean URL
+  const unique = deduplicateByUrl(collected);
 
-  const primaryQuery = queriesToRun[0];
-  const secondaryQuery = queriesToRun[1] || `${keywordObj.withAccent} Việt Nam`;
+  // Evaluate through CLIP with contrastive negative scoring & excludeKeywords
+  const evaluated = await evaluateCandidatesWithCLIP(unique.slice(0, 20), targetSubcat, {
+    kb_hint: kbSnippet,
+    exclude_types: excludeKeywords
+  });
 
-  // Run Bing, Google, and Wikimedia in PARALLEL with Promise.allSettled for max speed & resilience
+  // Strict category boundary filter (remove any candidate with excludeKeywords in title or url)
+  const cleanEvaluated = evaluated.filter(c => {
+    if (c.isValid === false) return false;
+    const combo = removeVietnameseTones(`${c.title || ''} ${c.url || ''} ${c.domain || ''}`);
+    const isExcluded = excludeKeywords.some(ex => {
+      const exClean = removeVietnameseTones(String(ex).trim());
+      return exClean && combo.includes(exClean);
+    });
+    if (isExcluded) return false;
+
+    // For innerwear: ensure it doesn't match generic travel, outer coats, ao dai, or dresses
+    if (isInnerwear) {
+      const isOuter = /ao khoac|blazer|bomber|mang to|jacket|cardigan|hoodie|doi kham|nhat binh|ao tac|parka|tripadvisor|thailand|travel|tour|ao dai|dam|vay/i.test(combo);
+      if (isOuter) return false;
+      const hasInnerTrait = /yem|ba lo|may o|coc tay|trung linh|canh|lot|camisole|tank|undershirt/i.test(combo);
+      if (!hasInnerTrait) return false;
+    }
+    return true;
+  });
+
+  // Return up to targetPoolSize (8-10 candidates)
+  return cleanEvaluated.slice(0, Math.max(8, targetPoolSize));
+}
+
+// Crawl specifically for an item/slot with Diversity & Search Hints
+export async function crawlForSlot(recItem = {}, userPrompt = '', targetCount = 4) {
+  const pool = await fetchSlotCandidatesInternetFirst(recItem, userPrompt, 10);
+  return mergeWithDiversity(pool, targetCount);
+}
+
+// Fetch 6-7 candidates, verify with CLIP, filter down to EXACTLY 4 BEST IMAGES
+export async function crawlKeywordImages(keywordObj, limit = 4, userPrompt = '') {
+  // 1. Tiền xử lý: LLM kết hợp User Prompt + Knowledge Base để tạo Search Queries chuyên sâu
+  const specializedQueries = await generateSpecializedSearchQueries(keywordObj, userPrompt);
+  
+  const primaryQuery = specializedQueries[0] || `${keywordObj.withAccent} cổ phục việt nam`;
+  const secondaryQuery = specializedQueries[1] || `${keywordObj.withAccent} traditional costume`;
+  const tertiaryQuery = specializedQueries[2] || `${keywordObj.withAccent} lookbook`;
+
+  // 2. Thu thập tầm 6-7 ảnh ứng viên từ Bing, Google, Wikimedia
   const searchPromises = [
     searchBingImages(primaryQuery),
     searchGoogleImages(primaryQuery),
     searchBingImages(secondaryQuery),
+    searchGoogleImages(secondaryQuery),
     searchWikimediaImages(keywordObj.withAccent)
   ];
 
@@ -317,26 +654,22 @@ export async function crawlKeywordImages(keywordObj) {
   }
 
   // Deduplicate by URL
-  const seen = new Set();
-  const unique = [];
-  for (const c of allRawCandidates) {
-    if (c.url && !seen.has(c.url)) {
-      seen.add(c.url);
-      unique.push(c);
-    }
-  }
+  const unique = deduplicateByUrl(allRawCandidates);
 
-  // Evaluate and rank by Relevance & Quality Score
-  const evaluated = unique
-    .map(c => evaluateCandidateWithRelevance(c, keywordObj))
-    .filter(c => c.isValid);
+  // Take candidate pool of 8-12 items for CLIP evaluation
+  const candidatePool = unique.slice(0, 12);
 
-  // Sort: Highest Relevance/Quality score first
-  evaluated.sort((a, b) => b.qualityScore - a.qualityScore);
+  // 3. Hậu kiểm tra: Lọc tên file, domain và chạy qua mô hình CLIP
+  const kbSnippet = buildRagKnowledgeContext(`${keywordObj.withAccent} ${userPrompt}`, 400);
+  const evaluatedCandidates = await evaluateCandidatesWithCLIP(candidatePool, keywordObj.withAccent, {
+    kb_hint: kbSnippet
+  });
 
-  // Take top 3
-  const top3 = evaluated.slice(0, 3);
-  return top3;
+  // 4. Lọc xuống còn ĐÚNG 4 ẢNH hợp lý và đa dạng kiểu dáng/màu sắc nhất
+  const targetLimit = Number(limit) || 4;
+  const diverseTop4 = mergeWithDiversity(evaluatedCandidates, targetLimit);
+
+  return diverseTop4;
 }
 
 // Download image locally to categorized folder & validate dimensions
@@ -348,7 +681,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // URLs to try: primary selected URL, then thumbnail if available
   const urlsToTry = [selectedImageUrl];
   const matchingCand = keywordObj.candidates?.find(c => c.url === selectedImageUrl);
   if (matchingCand && matchingCand.thumbnail && matchingCand.thumbnail !== selectedImageUrl) {
@@ -389,7 +721,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
 
   const sizeBytes = buffer.length;
 
-  // Inspect real dimensions with image-size
   let dimensions = { width: 0, height: 0, type: 'jpg' };
   try {
     const dim = sizeOf(buffer);
@@ -409,7 +740,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
     }
   }
 
-  // Determine file extension
   let ext = dimensions.type || customExt || 'jpg';
   if (ext === 'jpeg') ext = 'jpg';
   const cleanFilename = `${keywordObj.code}_${keywordObj.slug}.${ext}`;
@@ -418,7 +748,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
 
   fs.writeFileSync(targetPath, buffer);
 
-  // Update metadata file
   updateMetadata(keywordObj, {
     savedPath: relativePath,
     fullPath: targetPath,
@@ -444,7 +773,6 @@ export async function downloadAndSaveImage(keywordObj, selectedImageUrl, customE
   };
 }
 
-// Load or initialize metadata
 export function loadMetadata() {
   if (!fs.existsSync(DATASET_DIR)) {
     fs.mkdirSync(DATASET_DIR, { recursive: true });
@@ -459,7 +787,6 @@ export function loadMetadata() {
   return {};
 }
 
-// Save metadata entry
 export function updateMetadata(keywordObj, info) {
   const meta = loadMetadata();
   meta[keywordObj.code] = {

@@ -70,7 +70,7 @@ const CURATED_LOOKBOOK_IMAGES_DOWN = [
   }
 ];
 
-export default function WelcomeWorkspace({ keywords = [], onStartRemix, onGoToLibrary }) {
+export default function WelcomeWorkspace({ keywords = [], onStartRemix, onGoToLibrary, onGoToLookbook }) {
   // Combine with local dataset images if available
   const datasetImages = keywords
     .filter(k => k.status === 'saved' && k.savedImage?.url)
@@ -175,7 +175,7 @@ export default function WelcomeWorkspace({ keywords = [], onStartRemix, onGoToLi
               className="group relative inline-flex items-center gap-4 px-10 py-5 rounded-full bg-matcha-900 hover:bg-matcha-800 text-cream-50 font-fashion text-lg 2xl:text-xl font-bold tracking-wide shadow-xl hover:shadow-2xl shadow-matcha-950/25 transition-all duration-300 hover:scale-[1.04] active:scale-[0.97]"
             >
               <Sparkles className="w-5 h-5 2xl:w-6 2xl:h-6 text-amber-300 animate-spin" style={{ animationDuration: '8s' }} />
-              <span>Trải nghiệm ngay</span>
+              <span>Khám Phá Studio</span>
               <div className="w-8 h-8 rounded-full bg-cream-50/20 flex items-center justify-center group-hover:translate-x-1.5 transition-transform duration-300">
                 <ArrowRight className="w-5 h-5 text-cream-50" />
               </div>
@@ -186,8 +186,17 @@ export default function WelcomeWorkspace({ keywords = [], onStartRemix, onGoToLi
               className="inline-flex items-center gap-2.5 px-7 py-5 rounded-full bg-white hover:bg-matcha-50 text-matcha-900 font-sans text-sm 2xl:text-base font-bold border border-matcha-300 shadow-sm transition hover:scale-[1.02]"
             >
               <BookOpen className="w-4 h-4 2xl:w-5 2xl:h-5 text-matcha-700" />
-              <span>Khám phá Thư viện</span>
+              <span>Thư Viện Cổ Phục</span>
             </button>
+
+            {onGoToLookbook && (
+              <button
+                onClick={onGoToLookbook}
+                className="inline-flex items-center gap-2 px-6 py-5 rounded-full bg-cream-50 hover:bg-cream-100 text-matcha-900 font-sans text-sm 2xl:text-base font-bold border border-matcha-300 shadow-sm transition hover:scale-[1.02]"
+              >
+                <span>🖼️ Lookbook</span>
+              </button>
+            )}
           </div>
 
         </div>

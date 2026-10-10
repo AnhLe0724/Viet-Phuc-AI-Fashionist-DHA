@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight } from 'lucide-react';
+import { Database, Sparkles, FolderOpen, RefreshCw, Layers, Compass, ArrowUpRight, Cpu, Crown } from 'lucide-react';
 
 export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOpenFolder }) {
   return (
@@ -7,9 +7,13 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
       <div className="max-w-[2500px] w-full mx-auto px-4 sm:px-6 2xl:px-8">
         <div className="flex items-center justify-between h-18 py-2">
           
-          {/* Brand & Editorial Logo */}
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-full bg-matcha-100 border border-matcha-300 flex items-center justify-center shadow-sm">
+          {/* Brand & Editorial Logo (Clickable to Welcome) */}
+          <div 
+            onClick={() => setActiveTab('welcome')}
+            className="flex items-center gap-3.5 cursor-pointer group"
+            title="Về trang giới thiệu Welcome"
+          >
+            <div className="w-11 h-11 rounded-full bg-matcha-100 border border-matcha-300 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <span className="font-curvy text-2xl text-matcha-800 font-bold">vp</span>
             </div>
             <div>
@@ -30,20 +34,20 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
             </div>
           </div>
 
-          {/* Top Horizontal Navigation Tabs (Fashion Capsule) */}
+          {/* Top Horizontal Navigation Tabs (Haute Couture Capsule) */}
           <nav className="flex items-center bg-matcha-100/70 p-1.5 rounded-full border border-matcha-200/80 shadow-inner">
             <button
-              onClick={() => setActiveTab('crawl')}
+              onClick={() => setActiveTab('remix')}
               className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
-                activeTab === 'crawl'
+                activeTab === 'remix'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
               }`}
             >
-              <Database className="w-3.5 h-3.5 opacity-80" />
-              <span>Crawl Data</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'crawl' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                dev mode
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Remix Room</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'remix' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
+                studio
               </span>
             </button>
 
@@ -55,40 +59,25 @@ export default function Header({ activeTab, setActiveTab, stats, onRefresh, onOp
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 opacity-80 text-matcha-300" />
+              <Layers className="w-3.5 h-3.5 text-matcha-300" />
               <span>Library</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'library' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                dev mode
+                di sản
               </span>
             </button>
 
             <button
-              onClick={() => setActiveTab('welcome')}
+              onClick={() => setActiveTab('lookbook')}
               className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
-                activeTab === 'welcome'
+                activeTab === 'lookbook'
                   ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
                   : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
               }`}
             >
-              <Compass className="w-3.5 h-3.5 opacity-80 text-amber-300" />
-              <span>Welcome</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'welcome' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                intro
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('remix')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
-                activeTab === 'remix'
-                  ? 'bg-matcha-900 text-cream-50 shadow-md shadow-matcha-950/20'
-                  : 'text-matcha-800 hover:text-matcha-950 hover:bg-matcha-200/50'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 opacity-80 text-amber-300" />
-              <span>Remix Room</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'remix' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
-                studio
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>Lookbook</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${activeTab === 'lookbook' ? 'bg-matcha-800 text-matcha-200' : 'bg-matcha-200 text-matcha-800'}`}>
+                archives
               </span>
             </button>
           </nav>

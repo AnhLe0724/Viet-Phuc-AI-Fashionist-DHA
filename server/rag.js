@@ -3,27 +3,39 @@ import path from 'path';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { loadKeywords, removeVietnameseTones } from './keywords.js';
-import { loadMetadata } from './crawler.js';
+import { loadMetadata, crawlForSlot, fetchSlotCandidatesInternetFirst, evaluateCandidatesWithCLIP, mergeWithDiversity } from './crawler.js';
+import { buildRagKnowledgeContext } from './knowledge_loader.js';
+import { fashionLibrary } from './fashion_library.js';
+import { loadHeritageStylingRules } from './styling_rules_loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 
 const API_CONFIG_PATH = path.join(ROOT_DIR, 'src', 'knowledge', 'api.txt');
-const PHOI_DO_PATH = path.join(ROOT_DIR, 'src', 'knowledge', 'phoi do.txt');
 
-// 1. Read and parse API config from api.txt
-export function getApiConfig() {
+// 1. Read and parse API config from api.txt (supports 'text' and 'image' types)
+export function getApiConfig(type = 'text') {
   if (!fs.existsSync(API_CONFIG_PATH)) {
     throw new Error(`File config API không tồn tại: ${API_CONFIG_PATH}`);
   }
 
   const content = fs.readFileSync(API_CONFIG_PATH, 'utf-8');
-  const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const sections = content.split(/(?=API\s+(?:Text|Image)\s+To\s+(?:Text|Image))/i);
 
-  let model = 'ram/gemini-3.6-flash-high';
+  let targetSection = '';
+  if (type === 'image') {
+    targetSection = sections.find(s => /Image\s+To\s+Image/i.test(s)) || '';
+  } else {
+    targetSection = sections.find(s => /Text\s+To\s+Text/i.test(s)) || sections[0] || '';
+  }
+
+  const lines = targetSection.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let model = type === 'image' ? 'veo/gemini-3.0-pro-image' : 'ram/gemini-3.6-flash-high';
   let baseUrl = 'https://api.vilao.ai/v1';
-  let apiKey = '';
+  let apiKey = type === 'image' 
+    ? 'sk-ae9effb5a2ce8b274e72df27443de5391c9349e14fa3acccedd6edbeea2eb91f' 
+    : 'sk-0d96f175cdea67f6a9baeec9e4f1c54aedd2cba422245735b507f946d994fcea';
 
   for (const line of lines) {
     const lower = line.toLowerCase();
@@ -32,24 +44,27 @@ export function getApiConfig() {
     } else if (lower.startsWith('base url:') || lower.startsWith('url:')) {
       baseUrl = line.split(/base url:\s*/i)[1]?.trim() || line.split(/url:\s*/i)[1]?.trim() || baseUrl;
     } else if (lower.startsWith('api key:') || lower.startsWith('key:')) {
-      apiKey = line.split(/api key:\s*/i)[1]?.trim() || line.split(/key:\s*/i)[1]?.trim() || '';
+      apiKey = line.split(/api key:\s*/i)[1]?.trim() || line.split(/key:\s*/i)[1]?.trim() || apiKey;
     }
   }
 
   return { model, baseUrl, apiKey };
 }
 
-// 2. Load the full styling guide knowledge
+// 2. Load the full styling guide knowledge completely from Knowledge Base
 export function getKnowledgeBase() {
-  if (!fs.existsSync(PHOI_DO_PATH)) {
+  try {
+    const rulesData = loadHeritageStylingRules();
+    return rulesData.consolidatedMarkdown || 'Tài liệu cẩm nang phối đồ Cổ phục Việt Nam di sản.';
+  } catch (err) {
     return 'Tài liệu hướng dẫn phối đồ Cổ phục Việt Nam và trang phục hiện đại.';
   }
-  return fs.readFileSync(PHOI_DO_PATH, 'utf-8');
 }
 
 // 3. Retrieve relevant knowledge chunks based on user query
 export function retrieveRelevantKnowledge(userQuery, fullKnowledge) {
-  const queryNoAccent = removeVietnameseTones(userQuery.toLowerCase());
+  const queryStr = typeof userQuery === 'string' ? userQuery : (userQuery?.text || userQuery?.userPrompt || userQuery?.message || String(userQuery || ''));
+  const queryNoAccent = removeVietnameseTones(queryStr.toLowerCase());
   const tokens = queryNoAccent.split(/\s+/).filter(t => t.length > 2);
 
   const sections = fullKnowledge.split(/(?=^#+\s)/m);
@@ -108,7 +123,8 @@ export function getAvailableDatasetCatalog() {
     let imageUrl = null;
     let isSavedLocal = false;
 
-    if (saved && fs.existsSync(saved.fullPath)) {
+    const localRelPath = saved ? path.join(ROOT_DIR, 'dataset', kw.category.id, saved.filename) : null;
+    if (saved && ((localRelPath && fs.existsSync(localRelPath)) || (saved.fullPath && fs.existsSync(saved.fullPath)))) {
       imageUrl = `/api/dataset/${kw.category.id}/${saved.filename}`;
       isSavedLocal = true;
     } else if (kw.candidates && kw.candidates.length > 0) {
@@ -130,92 +146,256 @@ export function getAvailableDatasetCatalog() {
   return catalog;
 }
 
+// 4.5 Build Curated Exactly 4 Candidate Slots per Category using Internet-First Multi-Query Search & Max 1 Local Anchor
+export async function buildMultiCandidateSlots(userQuery = '', catalog = [], aiRecommendedItems = []) {
+  const queryNoAccent = removeVietnameseTones(userQuery.toLowerCase());
+
+  // Helper: map slot to candidate format
+  const formatLibItemToCandidate = (item, isAiRecommended = false) => ({
+    id: isAiRecommended ? `cand-ai-${item.slot}-${Date.now()}` : item.id,
+    code: item.code || `LIB_${(item.slot || 'item').toUpperCase()}`,
+    name: item.name,
+    category: item.category || 'Việt Phục',
+    badge: isAiRecommended ? '👑 AI Khuyên Dùng #1' : (item.badge || '✨ Kho Di Sản'),
+    url: item.imageUrl || item.url || '/api/clothes/viet_phuc_sample.jpg',
+    reason: item.reason || 'Món đồ chuẩn mực từ kho lưu trữ di sản.',
+    clipScore: isAiRecommended ? 98 : (item.clipScore || 95),
+    promptPart: `${item.nameNoAccent || item.name} fashion garment`
+  });
+
+  // Slot keys: innerwear, tops, bottoms, headwear, footwear, accessories
+  const slots = ['innerwear', 'tops', 'bottoms', 'headwear', 'footwear', 'accessories'];
+  const result = {};
+
+  for (const slotKey of slots) {
+    const singularKey = slotKey === 'tops' ? 'top' : slotKey === 'bottoms' ? 'bottom' : slotKey === 'accessories' ? 'accessory' : slotKey;
+
+    // 1. Get AI recommendation for this slot
+    const recItem = aiRecommendedItems.find(i => 
+      i.slot === singularKey || 
+      (singularKey === 'accessory' && (i.slot === 'accessory' || i.slot === 'layer')) ||
+      (singularKey === 'innerwear' && (i.slot === 'innerwear' || i.slot === 'inner_wear'))
+    );
+    const targetSubcat = recItem?.targetSubcategory || recItem?.name || '';
+    const excludeKeywords = [
+      ...(Array.isArray(recItem?.excludeKeywords) ? recItem.excludeKeywords : []),
+      ...(Array.isArray(recItem?.excludeTypes) ? recItem.excludeTypes : [])
+    ];
+
+    // Fallback heuristic excludes for traditional footwear if not set
+    if (singularKey === 'footwear') {
+      if (queryNoAccent.includes('hai') || (targetSubcat && removeVietnameseTones(targetSubcat).includes('hai'))) {
+        ['sneaker', 'giày thể thao', 'oxford', 'giày tây', 'cao gót', 'chunky', 'combat boots'].forEach(ex => {
+          if (!excludeKeywords.includes(ex)) excludeKeywords.push(ex);
+        });
+      }
+    }
+
+    // Fallback heuristic excludes for innerwear (strictly undergarments, NO outer coats / robes)
+    if (singularKey === 'innerwear') {
+      const innerExcludes = [
+        'áo khoác', 'khoác', 'áo khoác dạ', 'blazer', 'bomber', 'biker', 'măng tô',
+        'jacket', 'cardigan', 'hoodie', 'áo đối khâm', 'đối khâm', 'nhật bình', 'áo tấc',
+        'coat', 'overcoat', 'áo gió', 'parka', 'áo len dày'
+      ];
+      innerExcludes.forEach(ex => {
+        if (!excludeKeywords.includes(ex)) excludeKeywords.push(ex);
+      });
+    }
+
+    const candidatePool = [];
+    const seenNames = new Set();
+    const seenUrls = new Set();
+
+    // 2. KHO NỘI BỘ: CHỈ LẤY TỐI ĐA 1 ITEM CHUẨN (Anchor)
+    // Strictly limit to 1 item from local library
+    const libCandidates = fashionLibrary.getSlotCandidates(singularKey, targetSubcat || userQuery, 1, excludeKeywords);
+    let localAnchor = null;
+    if (libCandidates.length > 0) {
+      localAnchor = formatLibItemToCandidate(libCandidates[0], false);
+    }
+
+    // 3. TẬP TRUNG LẤY TỪ INTERNET: Thu thập 8-10 items trên internet cho từng slot
+    try {
+      const queryItem = recItem || {
+        slot: singularKey,
+        name: singularKey === 'innerwear' ? 'áo yếm lót trong' : targetSubcat,
+        targetSubcategory: targetSubcat
+      };
+      const internetCandidates = await fetchSlotCandidatesInternetFirst(queryItem, userQuery, 10);
+      for (const c of internetCandidates) {
+        const normName = removeVietnameseTones(c.title || c.name || '');
+        const cleanUrl = (c.url || '').split('?')[0].toLowerCase();
+        if (!seenNames.has(normName) && !seenUrls.has(cleanUrl) && c.url) {
+          seenNames.add(normName);
+          seenUrls.add(cleanUrl);
+          candidatePool.push({
+            id: `cand-web-${singularKey}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            code: `WEB_${singularKey.toUpperCase()}`,
+            name: c.title || targetSubcat,
+            category: c.domain ? `🌐 Web: ${c.domain}` : '🌐 Trực Tuyến',
+            badge: c.qualityBadge || '🌐 Khám Phá Mới',
+            url: c.url,
+            reason: `Hình ảnh tuyển chọn từ Internet (${c.domain || 'Web'}), đã thẩm định qua CLIP.`,
+            clipScore: c.clipScore || 88,
+            promptPart: `${c.title || targetSubcat} authentic traditional look`
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[fetchSlotCandidatesInternetFirst ${slotKey}] Error:`, err.message);
+    }
+
+    // 4. Nếu AI có gợi ý món #1 cụ thể, đưa lên vị trí danh dự đầu tiên
+    let topAiItem = null;
+    if (recItem && recItem.name) {
+      // Use image from first internet match if recItem doesn't have an image
+      const bestImgUrl = recItem.imageUrl || candidatePool[0]?.url || localAnchor?.url || '/api/clothes/viet_phuc_sample.jpg';
+      topAiItem = {
+        id: `cand-ai-${slotKey}-${Date.now()}`,
+        code: recItem.code || `REC_${singularKey.toUpperCase()}`,
+        name: recItem.name,
+        category: recItem.categoryName || (candidatePool[0]?.category || 'AI Tuyển Chọn'),
+        badge: '👑 AI Khuyên Dùng #1',
+        url: bestImgUrl,
+        reason: recItem.reason || 'Lựa chọn chuẩn mực và sắc sảo nhất cho concept bạn mong muốn.',
+        clipScore: 98,
+        promptPart: `${recItem.name} detailed aesthetic garment`
+      };
+      seenNames.add(removeVietnameseTones(recItem.name));
+    }
+
+    // 5. Kết hợp: 1 món kho chuẩn (nếu có) + các món internet
+    const combinedPool = [];
+    if (localAnchor && !seenNames.has(removeVietnameseTones(localAnchor.name))) {
+      combinedPool.push(localAnchor);
+      seenNames.add(removeVietnameseTones(localAnchor.name));
+    }
+    for (const c of candidatePool) {
+      combinedPool.push(c);
+    }
+
+    // 6. Áp dụng MMR-Lite Diversity để chọn 3-4 món đa dạng nhất
+    let diverseFinal = [];
+    if (topAiItem) {
+      // Pick 3 diverse items to accompany topAiItem
+      const restPool = combinedPool.filter(c => removeVietnameseTones(c.name) !== removeVietnameseTones(topAiItem.name));
+      const diverseRest = mergeWithDiversity(restPool, 3);
+      diverseFinal = [topAiItem, ...diverseRest];
+    } else {
+      diverseFinal = mergeWithDiversity(combinedPool, 4);
+    }
+
+    // 7. Fallback đảm bảo luôn có đủ 4 items
+    if (diverseFinal.length < 4) {
+      const extraLib = fashionLibrary.getSlotCandidates(singularKey, '', 4, excludeKeywords);
+      for (const ex of extraLib) {
+        if (diverseFinal.length >= 4) break;
+        const nName = removeVietnameseTones(ex.name);
+        if (!seenNames.has(nName)) {
+          diverseFinal.push(formatLibItemToCandidate(ex, false));
+          seenNames.add(nName);
+        }
+      }
+    }
+
+    result[slotKey] = diverseFinal.slice(0, 4);
+  }
+
+  return result;
+}
+
 // 5. Main RAG Chatbot Service
 export async function generateOutfitRecommendation(userMessage, conversationHistory = []) {
   const { model, baseUrl, apiKey } = getApiConfig();
   const fullKnowledge = getKnowledgeBase();
-  const relevantKnowledge = retrieveRelevantKnowledge(userMessage, fullKnowledge);
+  const baseKnowledge = retrieveRelevantKnowledge(userMessage, fullKnowledge);
+  const dynamicKb = buildRagKnowledgeContext(userMessage);
+  const relevantKnowledge = `${baseKnowledge}\n\n---\n\n${dynamicKb}`;
   const catalog = getAvailableDatasetCatalog();
 
   // Create a structured list of available items in dataset for the AI to choose from
   const datasetItemNames = catalog.map(item => `[${item.code}] ${item.name} (${item.categoryName})`).join('\n');
 
-  const systemPrompt = `Bạn là Chuyên gia Tư vấn Phối đồ & AI Stylist Cổ phục Việt Nam kiêm Bậc thầy Phong Thủy Thời Trang Di Sản của hệ thống "VIỆT PHỤC REMIX".
-Nhiệm vụ của bạn là tư vấn phối trang phục Cổ phục truyền thống Việt Nam kết hợp phong cách hiện đại (Remix/Streetwear/Casual) dựa trên hoàn cảnh, thể trạng, giới tính và mục đích của người dùng.
+  const systemPrompt = `Bạn là Chuyên gia Tư vấn Phối đồ & Haute Couture Stylist của hệ thống "VIỆT PHỤC REMIX".
+Nhiệm vụ của bạn là tư vấn phối trang phục Cổ phục truyền thống Việt Nam kết hợp phong cách hiện đại (Remix/Streetwear/Casual) dựa trên hoàn cảnh, thể trạng và gu thẩm mỹ của người dùng.
+
+PHONG CÁCH GIAO TIẾP & CẤU TRÚC PHẢN HỒI (BẮT BUỘC):
+Hãy trò chuyện bằng Tiếng Việt với phong cách của một Haute Couture Fashion Stylist cao cấp: duyên dáng, gần gũi, tinh tế, tràn đầy cảm hứng và am hiểu sâu sắc về di sản kết hợp thời trang đương đại.
+1. 👘 Lời chào & Phân tích phối đồ: Luôn mở đầu bằng lời chào ấm áp, trực tiếp đề cập đến hoàn cảnh người dùng hỏi (dạo phố, lễ tết, cafe, chụp ảnh cá tính...), phân tích vì sao bản phối này tạo nên sự cân bằng hoàn mỹ giữa nét trang trọng của Cổ phục và sự năng động, thời thượng của các món đồ hiện đại.
+2. ✨ Điểm nhấn các lớp phục trang (6 Lớp): Giới thiệu cách phối 6 lớp (Lớp lót trong / Innerwear, Áo ngoài, Quần/Váy, Mũ/Khăn, Giày/Dép, Phụ kiện) sao cho tôn dáng và thoải mái.
+3. 📸 Mẹo tạo dáng & Thần thái: Gợi ý 1-2 mẹo tạo dáng, góc máy hoặc thần thái khi chụp ảnh để người mặc tự tin và nổi bật nhất.
 
 QUY TẮC RAG BẮT BUỘC:
-1. Dựa trên tài liệu cẩm nang phối đồ được cung cấp bên dưới để phân tích chuẩn xác các quy tắc kết hợp trang phục (Ngũ thân, Giao lĩnh, Viên lĩnh, Nhật bình, Tứ thân, Bà ba, v.v.).
-2. QUAN TRỌNG: Bạn CHỈ ĐƯỢC PHÉP gợi ý các món trang phục/phụ kiện CÓ TRONG DANH SÁCH DATASET DƯỚI ĐÂY khi đề xuất bộ đồ. Không được bịa thêm các món đồ không có trong danh sách.
-3. Khi đưa ra bộ trang phục (Outfit), hãy chọn từ 3 đến 6 món thuộc các vị trí: top, bottom, layer, headwear, footwear, accessory.
+- Tận dụng tài liệu cẩm nang phối đồ và các file chuyên sâu trích xuất từ Knowledge Base (Kỹ thuật Layering xếp lớp, Triết lý "Ngoại thâm nội bạch", Áo Trung Lĩnh, Áo Cánh Lót, quy chuẩn Hữu Nhậm, v.v.).
+- Ưu tiên các món trang phục/phụ kiện có trong kho lưu trữ dataset và thư viện thời trang.
+- QUY TẮC ĐẶC BIỆT CHO LỚP MẶC TRONG (slot: "innerwear"): Đây là các loại áo mặc lót bên trong (Áo Yếm lụa/yếm đào, Áo Ba Lỗ cotton/may-ô/tank top lót trong, Áo Cộc Tay Lót cotton mỏng/undershirt, Áo Cánh Lót phin trắng, Áo Trung Lĩnh lót cổ đứng ló viền, Áo Hai Dây Lụa Camisole). TUYỆT ĐỐI KHÔNG chọn áo khoác, blazer, bomber, măng tô, áo đối khâm, áo tấc, áo dài hay áo ngoài cho slot innerwear.
+- TUYỆT ĐỐI KHÔNG phán quẻ bói toán, KHÔNG nói chuyện mê tín phong thủy rườm rà. KHÔNG xuất thẻ \`\`\`color_palettes\`\`\`.
 
-ĐẶC BIỆT KHI NGƯỜI DÙNG HỎI VỀ PHỐI MÀU / TÂM LINH PHONG THỦY:
-Khi người dùng hỏi về cách phối màu, hãy:
-- Đưa ra 2 đến 3 bảng phối màu cực kỳ ấn tượng, hài hòa giữa cổ điển và hiện đại.
-- Luận giải ý nghĩa TÂM LINH & PHONG THỦY NGŨ HÀNH như một THẦY BÓI THỜI TRANG CAO TAY (VD: Quẻ Đại Cát, Chiêu tài đắc lộc, Khai thông vận khí, Tương sinh Mộc-Hỏa-Kim-Thổ-Thủy, Kích hoạt cung Đào hoa tình duyên, Trừ tà khí, Tụ vượng khí...).
-- Đính kèm khối JSON \`\`\`color_palettes ... \`\`\` ở cuối bài với định dạng:
-\`\`\`color_palettes
-[
-  {
-    "paletteName": "Bản Phối 1: Mộc Hỏa Giao Duyên — Chiêu Tài Tụ Khí",
-    "vibe": "Tương Sinh Đại Cát",
-    "fortuneMeaning": "Thầy phán: Sắc xanh lục của Mộc dưỡng cho sắc đỏ tía của Hỏa. Quẻ này thuộc về Khai Quang Phát Tài, người diện set này khí sắc rạng ngời, quý nhân tương trợ, công việc hanh thông, trừ sạch ám khí.",
-    "colors": [
-      { "hex": "#2C3B23", "name": "Xanh Rêu Cung Đình", "role": "Áo chính" },
-      { "hex": "#8B263E", "name": "Đỏ Chu Sa Hoàng Tộc", "role": "Khăn vấn / Điểm nhấn" },
-      { "hex": "#DFB76C", "name": "Vàng Hoàng Kim", "role": "Phụ kiện / Kim loại" },
-      { "hex": "#F4EBD9", "name": "Trắng Sa Lụa", "role": "Quần sa lụa" }
-    ]
-  },
-  {
-    "paletteName": "Bản Phối 2: Matcha Trà Đạo — Thanh Tâm An Nhiên",
-    "vibe": "Tĩnh Tại & Bình An",
-    "fortuneMeaning": "Thầy phán: Tone xanh matcha nhạt kết hợp cùng kem ngà và nâu gốm thuộc quẻ Địa Thiên Thái. Giúp tĩnh tâm an thần, hóa giải thị phi, gia tăng hòa khí trong gia đạo và thu hút năng lượng chữa lành.",
-    "colors": [
-      { "hex": "#84A56C", "name": "Xanh Matcha Nhẹ", "role": "Áo chính" },
-      { "hex": "#EEF3E8", "name": "Bạch Ngọc Lụa", "role": "Quần / Váy" },
-      { "hex": "#6B5838", "name": "Nâu Gốm Mộc", "role": "Túi / Giày" },
-      { "hex": "#2D442A", "name": "Lục Thẫm Cổ", "role": "Phụ kiện" }
-    ]
-  }
-]
-\`\`\`
-
-ĐẶC BIỆT KHI NGƯỜI DÙNG HỎI VỀ TẠO DÁNG (POSING GUIDE):
-- Hướng dẫn 3-4 dáng chụp ấn tượng (Dáng dạo phố tự nhiên, Dáng quyền quý cung đình, Dáng tĩnh tâm trà đạo, Dáng chụp cận cảnh với phụ kiện).
-- Gợi ý góc máy và thần thái biểu cảm (ánh mắt, nụ cười nhẹ, tư thế tay cầm quạt/vạt áo).
-
-TÀI LIỆU CẨM NANG PHỐI ĐỒ (TRÍCH XUẤT TỪ PHOI DO.TXT):
-=== BẮT ĐẦU TÀI LIỆU ===
-${relevantKnowledge}
-=== KẾT THÚC TÀI LIỆU ===
-
-DANH SÁCH 100 QUẦN ÁO & PHỤ KIỆN KHẢ DỤNG TRONG DATASET:
-=== BẮT ĐẦU DANH SÁCH DATASET ===
-${datasetItemNames}
-=== KẾT THÚC DANH SÁCH DATASET ===
-
-CẤU TRÚC PHẢN HỒI:
-Hãy trả lời người dùng bằng Tiếng Việt với phong cách Haute Couture tinh tế, thông tuệ văn hóa và dí dỏm:
-1. 👘 **Phân tích chi tiết:** Giải đáp trực tiếp yêu cầu của người dùng.
-2. ✨ **Bộ trang phục hoặc Bảng màu đề xuất.**
-3. 💡 **Mẹo & Lưu ý di sản.**
-
-Nếu có đề xuất bộ trang phục mới, hãy đính kèm MỘT KHỐI JSON duy nhất nằm trong thẻ \`\`\`json ... \`\`\` với định dạng:
+ĐÍNH KÈM DUY NHẤT MỘT KHỐI JSON nằm trong thẻ \`\`\`json ... \`\`\` với đầy đủ 6 lớp trang phục và thông số semantic search:
 \`\`\`json
 {
   "outfitTitle": "Tên bộ trang phục ấn tượng",
-  "styleVibe": "Tên phong cách",
+  "styleVibe": "Tên phong cách (VD: Di Sản Cung Đình Tết, Dạo Phố Cà Phê, Tân Cổ Giao Duyên...)",
   "recommendedItems": [
     {
+      "slot": "innerwear",
+      "name": "Áo Yếm Lụa Tơ Tằm Cổ Xây",
+      "targetSubcategory": "áo yếm lụa cổ phục",
+      "searchHints": ["áo yếm lụa truyền thống", "áo yếm cổ phục việt nam", "áo ba lỗ lót trong", "áo cộc tay lót cotton"],
+      "diversityHints": ["yếm lụa đào", "yếm lụa tơ tằm trắng", "áo ba lỗ cotton ôm", "áo cộc tay lót mỏng"],
+      "excludeTypes": ["áo khoác", "blazer", "bomber", "măng tô", "jacket", "cardigan", "hoodie", "áo đối khâm", "áo tấc", "áo dài"],
+      "reason": "Lớp lót trong e ấp, tinh tế chuẩn mực y phục truyền thống Việt"
+    },
+    {
       "slot": "top",
-      "code": "VP_001",
-      "name": "Áo ngũ thân tay chẽn",
-      "reason": "Lý do chọn"
+      "name": "Áo dài ngũ thân tay chẽn gấm tơ tằm",
+      "targetSubcategory": "áo ngũ thân tay chẽn",
+      "searchHints": ["áo dài ngũ thân tay chẽn", "áo tấc lễ phục", "áo ngũ thân gấm"],
+      "diversityHints": ["màu đỏ hoàng gia", "màu vàng hoa cúc", "màu xanh lục nhung", "màu lam gấm"],
+      "excludeTypes": ["sườn xám", "hán phục", "áo khoác da", "áo phông"],
+      "reason": "Phom áo tôn dáng, gấm hoa văn sang trọng"
+    },
+    {
+      "slot": "bottom",
+      "name": "Quần lụa ống suông trắng ngà",
+      "targetSubcategory": "quần lụa ống suông truyền thống",
+      "searchHints": ["quần lụa trắng cổ phục", "quần la toà ống rộng"],
+      "diversityHints": ["màu trắng ngà", "màu đen huyền sa lụa", "màu kem"],
+      "excludeTypes": ["quần đùi", "váy ngắn", "quần rách", "legging ôm"],
+      "reason": "Chất lụa bay bổng trang nhã"
+    },
+    {
+      "slot": "headwear",
+      "name": "Nón lá truyền thống bài thơ",
+      "targetSubcategory": "nón lá truyền thống",
+      "searchHints": ["nón lá huế bài thơ", "nón lá truyền thống việt nam"],
+      "diversityHints": ["nón lá chằm chỉ", "khăn đóng đen gấm", "khăn vành dây"],
+      "excludeTypes": ["mũ lưỡi trai", "mũ len snapback", "mũ bảo hiểm"],
+      "reason": "Tạo nét duyên dáng đằm thắm"
+    },
+    {
+      "slot": "footwear",
+      "name": "Hài thêu hoa sen cổ truyền",
+      "targetSubcategory": "hài thêu truyền thống",
+      "searchHints": ["hài thêu hoa sen cổ phục", "guốc mộc quai nhung", "hài cong cung đình"],
+      "diversityHints": ["màu đỏ thêu chỉ vàng", "màu đen nhung thêu sen", "màu xanh lục thêu cúc", "guốc mộc quai nhung đỏ"],
+      "excludeTypes": ["sneaker", "giày thể thao", "giày oxford", "giày tây", "giày cao gót nhọn", "combat boots"],
+      "reason": "Hài thêu êm ái, đậm đà phong vị cổ phong"
+    },
+    {
+      "slot": "accessory",
+      "name": "Kiềng bạc chạm khắc sen cổ truyền",
+      "targetSubcategory": "trang sức bạc cung đình",
+      "searchHints": ["kiềng bạc chạm hoa sen", "ngọc bội thẻ bài đeo hông", "quạt lụa tròn thêu"],
+      "diversityHints": ["kiềng bạc trơn", "thẻ bài ngọc bích", "quạt lụa tay cầm"],
+      "excludeTypes": ["đồng hồ điện tử", "dây chuyền hiphop xích to"],
+      "reason": "Phụ kiện thanh tao tôn khí chất di sản"
     }
   ]
 }
 \`\`\`
-`;
+;`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -237,7 +417,7 @@ Nếu có đề xuất bộ trang phục mới, hãy đính kèm MỘT KHỐI JS
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        timeout: 8000
+        timeout: 12000
       }
     );
 
@@ -254,82 +434,64 @@ Nếu có đề xuất bộ trang phục mới, hãy đính kèm MỘT KHỐI JS
       }
     }
 
-    // Extract color palettes JSON if present
-    let colorPalettesData = null;
-    const paletteMatch = replyContent.match(/```color_palettes\s*([\s\S]*?)\s*```/);
-    if (paletteMatch && paletteMatch[1]) {
-      try {
-        colorPalettesData = JSON.parse(paletteMatch[1]);
-      } catch (err) {
-        console.warn('Cannot parse color palettes JSON:', err.message);
-      }
-    }
-
-    // Enhance outfitData with real image URLs from dataset catalog or on-the-fly search
+    // Enhance outfitData with real image URLs from FashionLibrary or catalog, and self-enrich library!
     if (outfitData && Array.isArray(outfitData.recommendedItems)) {
-      const allKeywords = loadKeywords();
-      
-      outfitData.recommendedItems = await Promise.all(
-        outfitData.recommendedItems.map(async (item) => {
-          // Find matching item in catalog by code or name
-          let match = catalog.find(c => 
-            (item.code && c.code.toLowerCase() === item.code.toLowerCase()) ||
-            (item.name && (c.name.toLowerCase().includes(item.name.toLowerCase()) || item.name.toLowerCase().includes(c.name.toLowerCase())))
-          );
+      outfitData.recommendedItems = outfitData.recommendedItems.map((item) => {
+        // Look up in FashionLibrary first
+        const searchMatches = fashionLibrary.searchLibrary(item.name, item.slot);
+        const match = searchMatches[0];
 
-          let finalImageUrl = match ? match.imageUrl : null;
-          let isSavedLocal = match ? match.isSavedLocal : false;
+        let finalImageUrl = match ? match.imageUrl : (item.imageUrl || null);
+        let finalCode = match ? match.code : (item.code || null);
+        let finalCategory = match ? match.category : (item.categoryName || 'Việt Phục Remix');
 
-          // If item doesn't have an image, find keyword and crawl top 3 on the fly
-          if (!finalImageUrl) {
-            const kwObj = allKeywords.find(k => 
-              (item.code && k.code.toLowerCase() === item.code.toLowerCase()) ||
-              (item.name && (k.withAccent.toLowerCase().includes(item.name.toLowerCase()) || item.name.toLowerCase().includes(k.withAccent.toLowerCase())))
-            );
+        if (!finalImageUrl) {
+          finalImageUrl = '/api/clothes/viet_phuc_sample.jpg';
+        }
 
-            if (kwObj) {
-              try {
-                const { crawlKeywordImages } = await import('./crawler.js');
-                const cands = await crawlKeywordImages(kwObj);
-                if (cands && cands.length > 0) {
-                  finalImageUrl = cands[0].thumbnail || cands[0].url;
-                  kwObj.candidates = cands;
-                }
-              } catch (e) {
-                console.warn(`[Auto-crawl image for ${item.name} failed]:`, e.message);
-              }
-            }
-          }
+        const enrichedItem = {
+          ...item,
+          code: finalCode,
+          name: match ? match.name : item.name,
+          categoryName: finalCategory,
+          imageUrl: finalImageUrl,
+          badge: '👑 AI Khuyên Dùng #1'
+        };
 
-          // Fallback image search query if still empty
-          if (!finalImageUrl) {
-            finalImageUrl = `https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=500&auto=format&fit=crop&q=60`;
-          }
+        // Self-enrich library: permanently store/boost this item in library cache
+        fashionLibrary.saveOrUpdateItem({
+          name: enrichedItem.name,
+          slot: enrichedItem.slot,
+          imageUrl: enrichedItem.imageUrl,
+          category: enrichedItem.categoryName,
+          reason: enrichedItem.reason
+        });
 
-          return {
-            ...item,
-            code: match ? match.code : item.code,
-            name: match ? match.name : item.name,
-            categoryName: match ? match.categoryName : 'Trang phục',
-            imageUrl: finalImageUrl,
-            isSavedLocal: isSavedLocal
-          };
-        })
-      );
+        return enrichedItem;
+      });
     }
 
-    // Clean text by removing raw JSON and color_palettes block from display message
-    const cleanText = replyContent
+    // Clean text by removing raw JSON block from display message
+    let cleanText = replyContent
       .replace(/```json[\s\S]*?```/g, '')
       .replace(/```color_palettes[\s\S]*?```/g, '')
       .trim();
+
+    // Ensure cleanText is always a natural, high-fashion response
+    if (!cleanText || cleanText.length < 25) {
+      cleanText = `Chào bạn! Với phong cách **${outfitData?.styleVibe || 'Việt Phục Remix'}** bạn mong muốn, mình đã tuyển chọn một bản phối 6 lớp trang phục đặc sắc: sự kết hợp ăn ý giữa phom dáng Cổ phục trang trọng và nét phá cách đương đại. Bộ trang phục vừa tôn vinh bản sắc di sản, vừa mang lại sự thoải mái, tự tin khi dạo phố hay lên hình!\n\nBạn có thể nhấn nút **"Áp Dụng Vào Studio (6 Lớp)"** bên dưới để đưa ngay cả bộ vào Studio phối thử nhé!`;
+    }
+
+    // Pass recommendedItems to buildMultiCandidateSlots so they appear at #1 position of each slot!
+    const candidateSlots = await buildMultiCandidateSlots(userMessage, catalog, outfitData?.recommendedItems || []);
 
     return {
       success: true,
       text: cleanText,
       rawReply: replyContent,
       outfit: outfitData,
-      colorPalettes: colorPalettesData,
+      candidateSlots: candidateSlots,
+      colorPalettes: null,
       retrievedKnowledgeLength: relevantKnowledge.length
     };
   } catch (error) {
@@ -338,59 +500,19 @@ Nếu có đề xuất bộ trang phục mới, hãy đính kèm MỘT KHỐI JS
     // Fallback Generator based on query type so app never breaks
     const q = removeVietnameseTones(userMessage.toLowerCase());
 
-    if (q.includes('phoi mau') || q.includes('mau sac') || q.includes('tam linh') || q.includes('ma mau')) {
+    if (q.includes('phoi mau') || q.includes('mau sac') || q.includes('ma mau')) {
       return {
         success: true,
-        text: `### 🔮 Luận Giải Bảng Phối Màu Hoàng Gia & Tâm Linh Di Sản
-
-Dựa trên cấu trúc cổ phục truyền thống và nguyên lý **Âm Dương Ngũ Hành**, việc kết hợp màu sắc không chỉ tạo nên tính duy mỹ Haute Couture mà còn là một liệu pháp phong thủy kích hoạt vận khí cát tường cho người mặc.
-
----
-
-### 👑 1. Nguyên Tắc Phối Màu Hoàng Cung
-* **Quy tắc Tam Hợp Sắc Điệu:** Kết hợp 1 tông màu đất/mộc làm chủ đạo (60%), 1 tông màu ngà lụa (30%) và 1 điểm nhấn chu sa/hoàng kim (10%).
-* **Sự Cân Bằng Âm Dương:** Sắc tối của Thường/Quần tạo độ đằm vững chãi (Âm), đối trọng cùng sắc tươi sáng của Vạt áo ngũ thân (Dương).
+        text: `### 🎨 Cẩm Nang Phối Màu Sắc Di Sản & Đương Đại
+Theo mỹ cảm Á Đông và kỹ nghệ thời trang cung đình, việc phối màu cổ phục tuân theo sự hài hòa giữa sắc độ chủ đạo, lớp lót ẩn và điểm nhấn trang sức.
 
 ---
 
-### ✨ 2. Chi Tiết Các Bảng Phối Màu Khối & Lời Phán Thầy Bói
-*(Mời bạn quan sát các khối màu hiện đại xếp cạnh nhau và bấm để sao chép mã HEX bên dưới)*`,
+### 👑 1. Nguyên Tắc Phối Màu Thời Trang Cổ Phục
+* **Tỷ lệ 60 - 30 - 10:** 60% sắc màu chủ đạo của áo chính, 30% sắc màu trang nhã của quần/váy (thường là Sa Bạch hoặc Lụa Đen), 10% điểm xuyết từ viền cổ lót và phụ kiện ngọc/bạc.
+* **Quy chuẩn "Ngoại thâm nội bạch":** Áo ngoài màu trầm hoặc sắc nét, cổ áo lót bên trong hé lộ viền trắng tinh khiết tạo nét đoan trang, thanh nhã.`,
         outfit: null,
-        colorPalettes: [
-          {
-            paletteName: "Bản Phối 1: Lục Mộc Hoàng Thổ — Khai Quang Đắc Lộc",
-            vibe: "Tương Sinh Đại Cát",
-            fortuneMeaning: "Thầy phán: Sắc xanh rêu của Mộc tương sinh nuôi dưỡng Hỏa và kết giao cùng Thổ kim. Quẻ này thuộc 'Đại Cát Đại Lợi', người diện set này thần thái ngút ngàn, quý nhân chỉ lối, vượng đường tài lộc và thanh trừ mọi chướng khí.",
-            colors: [
-              { hex: "#2E4B33", name: "Lục Rêu Cung Đình", role: "Áo ngũ thân chính" },
-              { hex: "#DFB76C", name: "Hoàng Kim Quý Tộc", role: "Trang sức / Điểm xuyết" },
-              { hex: "#EBE2D3", name: "Bạch Sa Thượng Hạng", role: "Quần sa lụa" },
-              { hex: "#8B263E", name: "Chu Sa Hoàng Tộc", role: "Khăn vấn / Điểm nhấn" }
-            ]
-          },
-          {
-            paletteName: "Bản Phối 2: Matcha Trà Đạo — Thanh Tâm Trừ Tà",
-            vibe: "Tĩnh Tại & Bình An",
-            fortuneMeaning: "Thầy phán: Quẻ 'Địa Thiên Thái'. Tone xanh matcha dịu mát kết hợp cùng bạch ngọc và nâu đất nung giúp tĩnh tâm an thần, hóa giải thị phi, gia tăng hòa khí tình duyên và thu hút năng lượng chữa lành thanh khiết.",
-            colors: [
-              { hex: "#7A9E66", name: "Xanh Matcha Nhẹ", role: "Áo giao lĩnh / ngũ thân" },
-              { hex: "#F5F7F2", name: "Bạch Ngọc Lụa", role: "Quần / Thường xếp ly" },
-              { hex: "#544634", name: "Nâu Gốm Mộc Mạc", role: "Túi xách / Dây đeo" },
-              { hex: "#263725", name: "Lục Thẫm Cổ Phục", role: "Phụ kiện viền" }
-            ]
-          },
-          {
-            paletteName: "Bản Phối 3: Hắc Mực & Xích Chu — Huyền Bí Quyền Uy",
-            vibe: "Phong Cách Dark Heritage",
-            fortuneMeaning: "Thầy phán: Quẻ 'Càn Uy Vạn Tượng'. Sắc đen tuyền của bóng đêm tương hỗ cùng đỏ tía chu sa tạo khí chất lãnh đạo kiêu hãnh, xua đuổi tiểu nhân, tăng cường uy lực và sự tự tin tuyệt đối.",
-            colors: [
-              { hex: "#1A1D1A", name: "Hắc Mực Thẫm", role: "Áo khoác đối khâm" },
-              { hex: "#9E2A2B", name: "Xích Đỏ Cung Đình", role: "Áo lót trong" },
-              { hex: "#C5A880", name: "Vàng Đồng Cổ Điển", role: "Khuy áo / Vòng kiềng" },
-              { hex: "#F8F9FA", name: "Trắng Sa Tinh Khiết", role: "Quần ống suông" }
-            ]
-          }
-        ],
+        colorPalettes: null,
         retrievedKnowledgeLength: relevantKnowledge.length
       };
     } else if (q.includes('tao dang') || q.includes('chup anh') || q.includes('dang')) {
@@ -483,6 +605,8 @@ Khi diện Cổ phục kết hợp hiện đại, thần thái quyết định 7
         ]
       };
 
+      const candidateSlots = await buildMultiCandidateSlots(userMessage, catalog, outfitObj?.recommendedItems || []);
+
       return {
         success: true,
         text: `### 👘 Đề Xuất Kiểu Phối Mới: ${outfitObj.outfitTitle}
@@ -494,6 +618,7 @@ Tôi đã tái cấu trúc lại bộ trang phục theo phong cách **${outfitOb
 * **Khoác Layer:** ${item3.name} — Nâng tầm đẳng cấp thời trang.
 * **Giày & Phụ kiện:** ${item4.name} & ${item5.name} — Hòa quyện cổ kim tinh tế.`,
         outfit: outfitObj,
+        candidateSlots: candidateSlots,
         colorPalettes: null,
         retrievedKnowledgeLength: relevantKnowledge.length
       };

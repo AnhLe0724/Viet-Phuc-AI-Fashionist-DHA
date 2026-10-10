@@ -1,0 +1,41 @@
+[
+  {
+    "id": "lookbook_1791567852779",
+    "filename": "remix_1791515454201_9bfnu.jpg",
+    "url": "/api/dataset/remix_outputs/remix_1791515454201_9bfnu.jpg",
+    "title": "Tác Phẩm Việt Phục Remix",
+    "prompt": "Bộ trang phục Cổ phục Việt Nam kết hợp phong cách di sản",
+    "layers": {
+      "top": {
+        "name": "Tác Phẩm Việt Phục Remix",
+        "badge": "Gấm Tơ Tằm"
+      },
+      "bottom": {
+        "name": "Quần Sa Lụa Trắng",
+        "badge": "Lụa Bạch"
+      },
+      "headwear": {
+        "name": "Khăn Đóng / Vành",
+        "badge": "Truyền Thống"
+      },
+      "footwear": {
+        "name": "Hài Thêu Sen",
+        "badge": "Cung Đình"
+      },
+      "accessory": {
+        "name": "Quạt Lụa / Thẻ Bài",
+        "badge": "Di Sản"
+      }
+    },
+    "guardrail": {
+      "scores": {
+        "cultural": 95,
+        "harmony": 93,
+        "weather": 91
+      }
+    },
+    "executionTime": null,
+    "modelUsed": "veo/gemini-3.0-pro-image",
+    "createdAt": "2026-10-09T17:44:12.780Z"
+  }
+]
