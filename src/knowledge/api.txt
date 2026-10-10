@@ -1,9 +1,0 @@
-API Text To Text
-tên model: ram/gemini-3.6-flash-high
-base url: https://api.vilao.ai/v1
-api key: sk-0d96f175cdea67f6a9baeec9e4f1c54aedd2cba422245735b507f946d994fcea
-
-API Image To Image
-tên model: veo/gemini-3.0-pro-image
-base url: https://api.vilao.ai/v1
-api key: sk-ae9effb5a2ce8b274e72df27443de5391c9349e14fa3acccedd6edbeea2eb91f

@@ -13,9 +13,10 @@ if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
+import 'dotenv/config';
 import { getApiConfig } from './rag.js';
 
-// Dynamic API Credentials from src/knowledge/api.txt with safe fallbacks
+// Dynamic API Credentials from environment variables (.env) with safe fallbacks
 export function getTextApiConfig() {
   try {
     return getApiConfig('text');

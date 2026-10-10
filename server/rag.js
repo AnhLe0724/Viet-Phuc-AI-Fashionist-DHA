@@ -8,46 +8,59 @@ import { buildRagKnowledgeContext } from './knowledge_loader.js';
 import { fashionLibrary } from './fashion_library.js';
 import { loadHeritageStylingRules } from './styling_rules_loader.js';
 
+import 'dotenv/config';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 
-const API_CONFIG_PATH = path.join(ROOT_DIR, 'src', 'knowledge', 'api.txt');
-
-// 1. Read and parse API config from api.txt (supports 'text' and 'image' types)
-export function getApiConfig(type = 'text') {
-  if (!fs.existsSync(API_CONFIG_PATH)) {
-    throw new Error(`File config API không tồn tại: ${API_CONFIG_PATH}`);
-  }
-
-  const content = fs.readFileSync(API_CONFIG_PATH, 'utf-8');
-  const sections = content.split(/(?=API\s+(?:Text|Image)\s+To\s+(?:Text|Image))/i);
-
-  let targetSection = '';
-  if (type === 'image') {
-    targetSection = sections.find(s => /Image\s+To\s+Image/i.test(s)) || '';
-  } else {
-    targetSection = sections.find(s => /Text\s+To\s+Text/i.test(s)) || sections[0] || '';
-  }
-
-  const lines = targetSection.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  let model = type === 'image' ? 'veo/gemini-3.0-pro-image' : 'ram/gemini-3.6-flash-high';
-  let baseUrl = 'https://api.vilao.ai/v1';
-  let apiKey = type === 'image' 
-    ? 'sk-ae9effb5a2ce8b274e72df27443de5391c9349e14fa3acccedd6edbeea2eb91f' 
-    : 'sk-0d96f175cdea67f6a9baeec9e4f1c54aedd2cba422245735b507f946d994fcea';
-
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (lower.startsWith('tên model:') || lower.startsWith('model:')) {
-      model = line.split(':')[1].trim();
-    } else if (lower.startsWith('base url:') || lower.startsWith('url:')) {
-      baseUrl = line.split(/base url:\s*/i)[1]?.trim() || line.split(/url:\s*/i)[1]?.trim() || baseUrl;
-    } else if (lower.startsWith('api key:') || lower.startsWith('key:')) {
-      apiKey = line.split(/api key:\s*/i)[1]?.trim() || line.split(/key:\s*/i)[1]?.trim() || apiKey;
+// Helper to ensure .env is parsed even if dotenv was not preloaded
+function loadEnvFallback() {
+  const envPath = path.join(ROOT_DIR, '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const raw = fs.readFileSync(envPath, 'utf-8');
+      raw.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
+        const idx = trimmed.indexOf('=');
+        if (idx !== -1) {
+          const key = trimmed.slice(0, idx).trim();
+          const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Cannot parse .env fallback:', e.message);
     }
   }
+}
 
+// 1. Read and parse API config from environment variables (.env)
+export function getApiConfig(type = 'text') {
+  loadEnvFallback();
+
+  if (type === 'image') {
+    const apiKey = process.env.IMAGE_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    const baseUrl = process.env.IMAGE_API_BASE_URL || process.env.API_BASE_URL || 'https://api.vilao.ai/v1';
+    const model = process.env.IMAGE_API_MODEL || 'veo/gemini-3.0-pro-image';
+
+    if (!apiKey) {
+      throw new Error('Chưa cấu hình IMAGE_API_KEY trong file .env. Vui lòng xem hướng dẫn trong file .env.example!');
+    }
+    return { model, baseUrl, apiKey };
+  }
+
+  // Default: text
+  const apiKey = process.env.TEXT_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  const baseUrl = process.env.TEXT_API_BASE_URL || process.env.API_BASE_URL || 'https://api.vilao.ai/v1';
+  const model = process.env.TEXT_API_MODEL || 'ram/gemini-3.6-flash-high';
+
+  if (!apiKey) {
+    throw new Error('Chưa cấu hình TEXT_API_KEY trong file .env. Vui lòng xem hướng dẫn trong file .env.example!');
+  }
   return { model, baseUrl, apiKey };
 }
 
