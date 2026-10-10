@@ -7,7 +7,7 @@ import {
   Palette, ChevronDown, Send, CloudSun, Snowflake, Calendar
 } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
-import { MULTI_SLOT_CATALOG } from './RemixRoomWorkspace';
+import { MULTI_SLOT_CATALOG } from '../constants/slotCatalog';
 import defaultManImg from '../human model/man 1.jpg';
 import defaultWomanImg from '../human model/woman 1.jpg';
 
@@ -122,7 +122,7 @@ export const CATEGORY_DEFINITIONS = [
   { key: 'footwear', label: 'Giày', fullLabel: 'Giày / Hài / Guốc', icon: Footprints, orderIndex: 6, position: 'right-bot' }
 ];
 
-export default function DressingRoomWorkspace({ onSwitchToStylist }) {
+export default function DressingRoomWorkspace({ onSwitchToStylist, initialLayers }) {
   // --- 1. MODEL STATE (Panel Remix) ---
   const [modelGender, setModelGender] = useState('man'); // 'man' | 'woman' | 'custom'
   const [humanImage, setHumanImage] = useState(defaultManImg);
@@ -172,6 +172,16 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
       console.warn('Cannot save dressing layers:', e);
     }
   }, [selectedLayers]);
+
+  // Synchronize when initialLayers is passed (e.g. from Lookbook "Phối lại")
+  useEffect(() => {
+    if (initialLayers && typeof initialLayers === 'object') {
+      setSelectedLayers(prev => ({
+        ...prev,
+        ...initialLayers
+      }));
+    }
+  }, [initialLayers]);
 
   // --- 2.5 SELECTED LAYER COLORS (6 SLOTS) ---
   const [layerColors, setLayerColors] = useState(() => {
@@ -897,16 +907,16 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
     <div className="w-full flex flex-col lg:flex-row gap-5 pb-10">
 
       {/* ========================================================================= */}
-      {/* PANEL TRÁI: REMIX (50% CHIỀU NGANG - TẤT CẢ NỘI DUNG NHỎ HƠN 10%)        */}
+      {/* PANEL TRÁI: REMIX (52-53% CHIỀU NGANG - RỘNG VÀ THOÁNG HƠN)               */}
       {/* ========================================================================= */}
-      <section className="w-full lg:w-1/2 flex flex-col space-y-3.5 origin-top transform scale-[0.90] -mb-16 lg:-mb-24">
+      <section className="w-full lg:w-[52%] xl:w-[53%] flex flex-col space-y-3.5 origin-top transform scale-[0.95] -mb-8 lg:-mb-12">
 
         {/* Panel Header & Model Controller */}
         <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-matcha-200/90 shadow-sm p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-0.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-matcha-100 border border-matcha-300 text-matcha-800 text-[11px] font-bold">
               <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Remix Studio • 50% Panel</span>
+              <span>Remix Studio • Dressing Panel</span>
             </div>
             <h2 className="font-fashion text-2xl font-bold text-matcha-950">
               Phòng Thử Đồ Trực Quan
@@ -983,7 +993,7 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
           <div className="flex flex-col xl:flex-row items-center justify-between gap-3 lg:gap-4 relative z-10 w-full flex-1 my-auto">
 
             {/* --- CỘT TRÁI (3 KHỐI GỌN CAO XANH ĐẬM): MŨ (TRÊN), ÁO TRONG (GIỮA), QUẦN (DƯỚI) --- */}
-            <div className="w-full xl:w-[185px] 2xl:w-[205px] xl:max-w-[215px] flex flex-col justify-between gap-3 sm:gap-4 h-[510px] sm:h-[535px] 2xl:h-[555px] shrink-0">
+            <div className="w-full xl:w-[195px] 2xl:w-[215px] xl:max-w-[225px] flex flex-col justify-between gap-3 sm:gap-4 h-[525px] sm:h-[550px] 2xl:h-[570px] shrink-0">
               
               {/* 1. KHỐI TRÁI TRÊN: MŨ (HEADWEAR) */}
               <RectSlotBlock
@@ -1024,7 +1034,7 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
             <div className="flex items-center justify-center relative my-2 xl:my-0 px-1 shrink-0">
               
               {/* Central Model Frame */}
-              <div className="w-[245px] sm:w-[270px] 2xl:w-[290px] h-[510px] sm:h-[535px] 2xl:h-[555px] bg-white rounded-3xl border-2 border-matcha-300 shadow-xl overflow-hidden relative group transition-transform duration-300">
+              <div className="w-[255px] sm:w-[280px] 2xl:w-[305px] h-[525px] sm:h-[550px] 2xl:h-[570px] bg-white rounded-3xl border-2 border-matcha-300 shadow-xl overflow-hidden relative group transition-transform duration-300">
                 <img
                   src={humanImage}
                   alt="Người Mẫu Studio"
@@ -1067,7 +1077,7 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
             </div>
 
             {/* --- CỘT PHẢI (3 KHỐI GỌN CAO XANH ĐẬM): PHỤ KIỆN (TRÊN), ÁO NGOÀI (GIỮA), GIÀY (DƯỚI) --- */}
-            <div className="w-full xl:w-[185px] 2xl:w-[205px] xl:max-w-[215px] flex flex-col justify-between gap-3 sm:gap-4 h-[510px] sm:h-[535px] 2xl:h-[555px] shrink-0">
+            <div className="w-full xl:w-[195px] 2xl:w-[215px] xl:max-w-[225px] flex flex-col justify-between gap-3 sm:gap-4 h-[525px] sm:h-[550px] 2xl:h-[570px] shrink-0">
 
               {/* 4. KHỐI PHẢI TRÊN: PHỤ KIỆN (ACCESSORIES) */}
               <RectSlotBlock
@@ -1191,9 +1201,9 @@ export default function DressingRoomWorkspace({ onSwitchToStylist }) {
 
 
       {/* ========================================================================= */}
-      {/* PANEL PHẢI: DRESSING ROOM (TỦ ĐỒ) & STYLIST CHATBOT (50% CHIỀU NGANG)     */}
+      {/* PANEL PHẢI: DRESSING ROOM (TỦ ĐỒ) & STYLIST CHATBOT (47-48% CHIỀU NGANG)  */}
       {/* ========================================================================= */}
-      <section className="w-full lg:w-1/2 flex flex-col space-y-4">
+      <section className="w-full lg:w-[48%] xl:w-[47%] flex flex-col space-y-4">
 
         {/* HÀNG TRÊN CÙNG: CHUYỂN ĐỔI QUA LẠI GIỮA TỦ ĐỒ (COSTUMES) VÀ STYLIST CHATBOT */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-matcha-200/90 p-1.5 shadow-xs flex items-center gap-1.5 shrink-0">
@@ -1878,7 +1888,7 @@ function RectSlotBlock({
   return (
     <div
       onClick={onSelectSlot}
-      className={`w-full h-[152px] sm:h-[158px] 2xl:h-[164px] p-2.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between relative group shadow-md shrink-0 ${
+      className={`w-full h-[156px] sm:h-[162px] 2xl:h-[168px] p-2.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between relative group shadow-md shrink-0 ${
         isActiveCategory
           ? 'bg-[#193d25] border-amber-400 ring-2 ring-amber-400/40 shadow-emerald-950/40'
           : 'bg-[#142d1d] hover:bg-[#183623] border-[#22472e] hover:border-matcha-500 shadow-xs'
@@ -1914,7 +1924,7 @@ function RectSlotBlock({
       {/* 2. Middle Body: Thumbnail + Item Details */}
       <div className="flex items-center gap-2 my-auto w-full">
         {/* Thumbnail Image Box */}
-        <div className="w-12 h-12 sm:w-14 sm:h-14 2xl:w-15 2xl:h-15 rounded-xl bg-black/40 border border-white/15 overflow-hidden shrink-0 flex items-center justify-center relative shadow-inner">
+        <div className="w-13 h-13 sm:w-15 sm:h-15 2xl:w-16 2xl:h-16 rounded-xl bg-black/40 border border-white/15 overflow-hidden shrink-0 flex items-center justify-center relative shadow-inner">
           {!isNone && (item?.url || item?.imageUrl) ? (
             <img
               src={item.url || item.imageUrl}

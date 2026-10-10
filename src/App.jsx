@@ -3,7 +3,6 @@ import Header from './components/Header';
 import CrawlDataWorkspace from './components/CrawlDataWorkspace';
 import WelcomeWorkspace from './components/WelcomeWorkspace';
 import LibraryWorkspace from './components/LibraryWorkspace';
-import RemixRoomWorkspace from './components/RemixRoomWorkspace';
 import DressingRoomWorkspace from './components/DressingRoomWorkspace';
 import TestingWorkspace from './components/TestingWorkspace';
 import LookbookWorkspace from './components/LookbookWorkspace';
@@ -262,13 +261,8 @@ function AppContent() {
             )}
 
             {activeTab === 'dressing' && (
-              <DressingRoomWorkspace />
-            )}
-
-            {activeTab === 'remix' && (
-              <RemixRoomWorkspace
+              <DressingRoomWorkspace 
                 initialLayers={initialRemixLayers}
-                onOpenFolder={() => handleOpenFolder()}
               />
             )}
 
@@ -276,7 +270,7 @@ function AppContent() {
               <LibraryWorkspace
                 keywords={keywords}
                 savedCount={savedCount}
-                onSwitchToRemix={() => setActiveTab('remix')}
+                onSwitchToRemix={() => setActiveTab('dressing')}
                 onOpenFolder={() => handleOpenFolder()}
                 onDeleteKeyword={(id) => {
                   setKeywords(prev => prev.filter(k => k.id !== id && k.code !== id));
@@ -287,10 +281,10 @@ function AppContent() {
 
             {activeTab === 'lookbook' && (
               <LookbookWorkspace
-                onGoToRemix={() => setActiveTab('remix')}
+                onGoToRemix={() => setActiveTab('dressing')}
                 onRemixAgain={(layers) => {
                   setInitialRemixLayers(layers);
-                  setActiveTab('remix');
+                  setActiveTab('dressing');
                 }}
               />
             )}

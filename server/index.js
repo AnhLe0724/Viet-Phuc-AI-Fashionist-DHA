@@ -21,7 +21,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DATASET_DIR = path.join(ROOT_DIR, 'dataset');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -663,6 +663,16 @@ app.post('/api/costumes/search-google', async (req, res) => {
     res.status(500).json({ success: false, message: err.message || 'Lỗi khi tìm kiếm trên Web' });
   }
 });
+
+// Serve built static frontend files in production
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`[Backend Server] Chạy trên http://localhost:${PORT}`);
